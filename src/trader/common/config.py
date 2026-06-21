@@ -25,6 +25,9 @@ class Settings(BaseSettings):
     openai_api_key: str = Field(default="", description="OpenAI API key")
     openai_model: str = Field(default="gpt-4.1-mini", description="Chat model name")
 
+    # --- Web search ---
+    tavily_api_key: str = Field(default="", description="Tavily API key")
+
     # --- Telegram ---
     telegram_bot_token: str = Field(
         default="", alias="TELEGRAM_API_TOKEN", description="Telegram bot token"

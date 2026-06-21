@@ -21,7 +21,7 @@ class TradingAgent:
         model = ChatOpenAI(
             model=self._settings.openai_model,
             api_key=self._settings.openai_api_key,
-            temperature=0,
+            temperature=0.4,
         )
         self._graph = create_react_agent(
             model,

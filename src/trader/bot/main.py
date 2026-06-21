@@ -11,7 +11,7 @@ import logging
 
 import httpx
 import telegramify_markdown
-from aiogram import Bot, Dispatcher
+from aiogram import Bot, Dispatcher, F
 from aiogram.enums import ParseMode
 from aiogram.filters import Command, CommandObject
 from aiogram.types import Message
@@ -40,29 +40,15 @@ async def _ask_agent(message: str, thread_id: str) -> str:
         return resp.json()["response"]
 
 
-@dp.message(Command("start", "help"))
-async def cmd_help(message: Message) -> None:
-    await message.answer(
-        "👋 I'm AI Trader.\n\n"
-        "Use /find <topic> to research interesting Polymarket bets.\n"
-        "Example: /find bitcoin price 2026"
-    )
-
-
-@dp.message(Command("find"))
-async def cmd_find(message: Message, command: CommandObject) -> None:
+async def _research_and_reply(message: Message, prompt: str) -> None:
+    """Send the prompt to the agent and reply with its formatted answer."""
     if not _allowed(message.chat.id):
         await message.answer("Sorry, you are not on the allowlist.")
         return
 
-    topic = (command.args or "").strip()
-    if not topic:
-        await message.answer("Usage: /find <topic>")
-        return
-
     await message.answer("🔎 Researching…")
     try:
-        answer = await _ask_agent(topic, thread_id=str(message.chat.id))
+        answer = await _ask_agent(prompt, thread_id=str(message.chat.id))
     except Exception:  # noqa: BLE001 - surface a friendly error, log details
         logger.exception("agent call failed")
         await message.answer("⚠️ Something went wrong while researching. Try again.")
@@ -71,6 +57,30 @@ async def cmd_find(message: Message, command: CommandObject) -> None:
         telegramify_markdown.markdownify(answer),
         parse_mode=ParseMode.MARKDOWN_V2,
     )
+
+
+@dp.message(Command("start", "help"))
+async def cmd_help(message: Message) -> None:
+    await message.answer(
+        "👋 I'm AI Trader.\n\n"
+        "Just send me a topic and I'll research interesting Polymarket bets.\n"
+        "You can also use /find <topic>.\n"
+        "Example: bitcoin price 2026"
+    )
+
+
+@dp.message(Command("find"))
+async def cmd_find(message: Message, command: CommandObject) -> None:
+    topic = (command.args or "").strip()
+    if not topic:
+        await message.answer("Usage: /find <topic>")
+        return
+    await _research_and_reply(message, topic)
+
+
+@dp.message(F.text & ~F.text.startswith("/"))
+async def any_message(message: Message) -> None:
+    await _research_and_reply(message, message.text)
 
 
 async def main() -> None:
