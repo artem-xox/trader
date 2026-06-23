@@ -283,15 +283,34 @@ the webhook returns fast; the result is pushed back to Telegram when ready.
 
 ---
 
-## 12. Deployment (DigitalOcean)
+## 12. Deployment (DigitalOcean App Platform)
 
-- Containerize the FastAPI service (Docker).
-- Options: DO App Platform (simplest) or a Droplet + docker-compose.
-  - **v1 recommendation:** Droplet + `docker-compose` running: app, Langfuse, Postgres
-    (managed DO Postgres preferred for the app DB; Langfuse can share or have its own).
-- Telegram webhook → public HTTPS URL (DO provides; or Caddy/Traefik for TLS on a
-  Droplet).
-- Secrets via env (`.env` not committed). See §13.
+Spec: [`.do/app.yaml`](../.do/app.yaml). One `Dockerfile` builds a single image used by
+two components:
+
+- **`agent`** — `service` (FastAPI/uvicorn), public, health-checked at `/health`, port
+  8080. Built from the Dockerfile's default `CMD`.
+- **`telegram`** — `worker` running the aiogram bot via long-polling (no public URL).
+  Overrides `run_command` to `uv run python -m trader.ui.telegram.main`. Reaches the
+  agent over the internal network via `AGENT_APP_URL=${agent.PRIVATE_URL}`.
+
+Deploy:
+```
+doctl apps create --spec .do/app.yaml            # first time
+doctl apps update <APP_ID> --spec .do/app.yaml   # subsequent changes
+```
+`deploy_on_push: true` redeploys on pushes to `main`.
+
+**Secrets** are placeholders in the spec — set real values in the DO dashboard (or via
+`doctl`); never commit them. See §13 for the list.
+
+**Follow-ups / tradeoffs:**
+- The `agent` service is currently public (so `/agent/invoke` is reachable). Only the bot
+  calls it — lock it down later (internal-only component, or a shared auth token header).
+- Bot uses long-polling (worker). Switching to Telegram webhook would make the bot a
+  second public `service` and requires aiogram webhook wiring — deferred.
+- Postgres/Langfuse are not yet deployed; add as managed DB + a component when memory and
+  self-hosted observability land.
 
 ---
 

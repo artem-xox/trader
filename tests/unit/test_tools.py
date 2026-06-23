@@ -10,8 +10,8 @@ import json
 
 import pytest
 
-from trader.core.clients import parse_market
-from trader.core.tools import polymarket_search
+from trader.core.clients import PolymarketClient, TavilyClient, parse_market
+from trader.core.tools import build_tools
 
 
 def test_parse_market_normalizes_prices():
@@ -42,6 +42,7 @@ def test_parse_market_skips_closed():
 @pytest.mark.live
 @pytest.mark.asyncio
 async def test_polymarket_search_live():
+    polymarket_search, _ = build_tools(PolymarketClient(), TavilyClient(api_key="dummy"))
     out = await polymarket_search.ainvoke({"query": "bitcoin", "limit": 2})
     assert isinstance(out, str)
     assert "market_id" in out or "No active" in out

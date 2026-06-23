@@ -4,12 +4,12 @@ from __future__ import annotations
 
 
 async def test_calls_polymarket_search(run_with_tools):
-    final, tools = await run_with_tools(
+    result, tools = await run_with_tools(
         "Find interesting Polymarket bets about bitcoin price in 2026."
     )
     assert "polymarket_search" in tools
-    # A real suggestion should link to polymarket.
-    assert "polymarket" in final.lower()
+    # Real suggestions must carry market ids that came from the tools (verifier-enforced).
+    assert all(s.market_id for s in result.suggestions)
 
 
 async def test_calls_web_search(run_with_tools, _require_tavily):

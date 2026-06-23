@@ -22,4 +22,4 @@ class Planner:
     async def __call__(self, state: AgentState) -> PlannerResponse:
         messages = [SystemMessage(self._prompt), *state["messages"]]
         response = await self._model.ainvoke(messages)
-        return {"messages": [response]}
+        return {"messages": [response], "iteration": state.get("iteration", 0) + 1}

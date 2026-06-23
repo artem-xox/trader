@@ -16,3 +16,18 @@ Hard rules:
 - Be concise. For each suggestion give: the question, the implied probability, and a
   one-line rationale for why it's interesting.
 """
+
+RESPONDER_PROMPT = """You are finalizing a prediction-market research turn.
+
+Read the conversation above (the analyst's reasoning and the tool results) and produce
+the structured result:
+- `summary`: a short natural-language answer for the user. If no markets are worth
+  suggesting, say so here and leave `suggestions` empty.
+- `suggestions`: the ranked shortlist. For EACH suggestion include a risk assessment.
+
+Hard rules:
+- ONLY include markets whose `market_id` actually appears in the polymarket tool results.
+  Never invent a market or an id.
+- Use the markets' real `url` and `implied_probability` from the tool results.
+- Keep rationales grounded in the evidence gathered, not generic.
+"""

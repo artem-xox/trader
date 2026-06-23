@@ -8,8 +8,10 @@ from typing import Annotated, NotRequired, TypedDict
 from langchain_core.messages import AnyMessage, ToolMessage
 from langgraph.graph.message import add_messages
 
-# The conversation passed in/out of the agent. History is owned by the UI layer and
-# handed to the agent at invocation time.
+from trader.core.models.domain import ResearchResult
+
+# The conversation passed in/out of the agent. New messages are appended to the
+# per-thread state owned by the graph checkpointer (keyed by thread_id).
 Messages = list[AnyMessage]
 
 class PlannerAction(StrEnum):
@@ -35,21 +37,35 @@ class ReviewVerdict(StrEnum):
 
 class AgentState(TypedDict):
     messages: Annotated[Messages, add_messages]
+    # Number of planner (reasoning) steps taken so far — the real loop budget.
+    iteration: NotRequired[int]
     guard_verdict: NotRequired[GuardVerdict]
     review_verdict: NotRequired[ReviewVerdict]
+    # The structured final answer, produced by the responder before the loop ends.
+    result: NotRequired[ResearchResult]
 
 
 class PlannerResponse(TypedDict):
     messages: Messages
+    iteration: int
 
 
 class GuardResponse(TypedDict):
     guard_verdict: GuardVerdict
+    # Feedback appended to the conversation when a plan is blocked, so the planner can revise.
+    messages: NotRequired[Messages]
 
 
 class ExecutorResponse(TypedDict):
     messages: list[ToolMessage]
 
 
+class ResponderResponse(TypedDict):
+    result: ResearchResult
+    messages: Messages
+
+
 class VerifierResponse(TypedDict):
     review_verdict: ReviewVerdict
+    # Feedback appended to the conversation when the answer is rejected, so the planner can revise.
+    messages: NotRequired[Messages]

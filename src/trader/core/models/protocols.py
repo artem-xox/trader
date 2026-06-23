@@ -8,12 +8,14 @@ from __future__ import annotations
 
 from typing import Protocol, runtime_checkable
 
+from trader.core.models.domain import ResearchResult
 from trader.core.models.schemas import (
     AgentState,
     ExecutorResponse,
     GuardResponse,
     Messages,
     PlannerResponse,
+    ResponderResponse,
     VerifierResponse,
 )
 
@@ -40,6 +42,13 @@ class Executor(Protocol):
 
 
 @runtime_checkable
+class Responder(Protocol):
+    """Synthesizes the loop's conclusion into the structured `ResearchResult`."""
+
+    async def __call__(self, state: AgentState) -> ResponderResponse: ...
+
+
+@runtime_checkable
 class Verifier(Protocol):
     """Final gate before the answer leaves the loop."""
 
@@ -48,6 +57,10 @@ class Verifier(Protocol):
 
 @runtime_checkable
 class Agent(Protocol):
-    """An agent runs a conversation (full history passed in) and returns an answer."""
+    """An agent runs a research turn for a thread and returns the structured result.
 
-    async def invoke(self, messages: Messages) -> str: ...
+    Conversation history is owned by the graph checkpointer (keyed by `thread_id`); the
+    caller passes only the new message(s).
+    """
+
+    async def invoke(self, messages: Messages, *, thread_id: str | None = None) -> ResearchResult: ...

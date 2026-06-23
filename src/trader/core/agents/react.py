@@ -1,95 +1,119 @@
 """Custom ReAct agent.
 
 This module owns only the loop topology — the transitions between components and how
-they compile into a graph. The behaviour lives in `trader.core.components`; the model is
-injected (see `trader.core.bootstrap`).
+they compile into a graph. The behaviour lives in `trader.core.components`; the model
+and checkpointer are injected (see `trader.core.bootstrap`).
 
-    START → planner ──tool_calls?──→ guard ──allow?──→ executor → planner
-                    │                     └──block───→ planner   (revise plan)
-                    └──final answer──→ verifier ──ok?──→ END
-                                                └──revise──→ planner
+    START → planner ──tool_calls?──→ guard ──allow?──→ executor ──budget?──→ planner
+                    │                     └──block───→ planner   │  (else)    └─→ responder
+                    └──final answer──────────────────────────────→ responder → verifier ──ok?──→ END
+                                                                                          └──revise──→ planner
+
+The loop budget is the `iteration` counter (planner steps), not `recursion_limit`:
+once it is exhausted the executor routes straight to the responder (so the requested
+tools still run and the history stays valid) and the verifier stops revising.
 """
 
 from __future__ import annotations
 
+from langgraph.checkpoint.base import BaseCheckpointSaver
 from langgraph.graph import END, START, StateGraph
 
 from trader.common.config import Settings
 from trader.core.agents.base import BaseAgent
-from trader.core.models.protocols import Executor, Guard, Planner, Verifier
+from trader.core.models.domain import ResearchResult
+from trader.core.models.protocols import Executor, Guard, Planner, Responder, Verifier
 from trader.core.models.schemas import AgentState, GuardVerdict, Messages, PlannerAction, ReviewVerdict
 
 
-def _route_after_planner(state: AgentState) -> str:
-    """Tool calls → gate them; otherwise the planner drafted a final answer → verify."""
-    last = state["messages"][-1]
-    return "act" if getattr(last, "tool_calls", None) else "answer"
-
-
-def _route_after_guard(state: AgentState) -> GuardVerdict:
-    """Allowed tool calls → execute; blocked → back to the planner to revise."""
-    return state.get("guard_verdict", GuardVerdict.ALLOW)
-
-
-def _route_after_verifier(state: AgentState) -> ReviewVerdict:
-    """Accepted answer → finish; otherwise loop back to revise."""
-    return state.get("review_verdict", ReviewVerdict.OK)
-
-
 class ReActAgent(BaseAgent):
-    
+
     AGENT_NAME = "react"
-    
+
     def __init__(
         self,
         *,
         planner: Planner,
-        executor: Executor,
-        verifier: Verifier,
         guard: Guard,
+        executor: Executor,
+        responder: Responder,
+        verifier: Verifier,
+        checkpointer: BaseCheckpointSaver,
         settings: Settings | None = None,
     ) -> None:
         super().__init__(settings)
         self._planner = planner
-        self._executor = executor
-        self._verifier = verifier
         self._guard = guard
+        self._executor = executor
+        self._responder = responder
+        self._verifier = verifier
+        self._checkpointer = checkpointer
         self._graph = self._build_graph()
+
+    def _route_after_planner(self, state: AgentState) -> PlannerAction:
+        """Tool calls → gate them; otherwise the planner drafted an answer → synthesize."""
+        last = state["messages"][-1]
+        return PlannerAction.ACT if getattr(last, "tool_calls", None) else PlannerAction.ANSWER
+
+    def _route_after_guard(self, state: AgentState) -> GuardVerdict:
+        """Allowed tool calls → execute; blocked → back to the planner to revise."""
+        return state.get("guard_verdict", GuardVerdict.ALLOW)
+
+    def _route_after_executor(self, state: AgentState) -> str:
+        """Budget left → keep reasoning; exhausted → synthesize with what we have."""
+        if state.get("iteration", 0) >= self._settings.agent_max_iterations:
+            return "responder"
+        return "planner"
+
+    def _route_after_verifier(self, state: AgentState) -> ReviewVerdict:
+        """Accepted answer → finish; reject → revise, unless the budget is exhausted."""
+        verdict = state.get("review_verdict", ReviewVerdict.OK)
+        if verdict == ReviewVerdict.REVISE and state.get("iteration", 0) >= self._settings.agent_max_iterations:
+            return ReviewVerdict.OK
+        return verdict
 
     def _build_graph(self):
         """Build the ReAct graph."""
-        
+
         builder = StateGraph(AgentState)
-        
+
         builder.add_node("planner", self._planner)
         builder.add_node("guard", self._guard)
         builder.add_node("executor", self._executor)
+        builder.add_node("responder", self._responder)
         builder.add_node("verifier", self._verifier)
 
         builder.add_edge(START, "planner")
         builder.add_conditional_edges(
-            "planner", 
-            _route_after_planner, 
-            {PlannerAction.ACT: "guard", PlannerAction.ANSWER: "verifier"},
+            "planner",
+            self._route_after_planner,
+            {PlannerAction.ACT: "guard", PlannerAction.ANSWER: "responder"},
         )
         builder.add_conditional_edges(
             "guard",
-            _route_after_guard,
+            self._route_after_guard,
             {GuardVerdict.ALLOW: "executor", GuardVerdict.BLOCK: "planner"},
         )
-        builder.add_edge("executor", "planner")
+        builder.add_conditional_edges(
+            "executor",
+            self._route_after_executor,
+            {"planner": "planner", "responder": "responder"},
+        )
+        builder.add_edge("responder", "verifier")
         builder.add_conditional_edges(
             "verifier",
-            _route_after_verifier,
+            self._route_after_verifier,
             {ReviewVerdict.OK: END, ReviewVerdict.REVISE: "planner"},
         )
 
-        return builder.compile(name=self.AGENT_NAME)
+        return builder.compile(name=self.AGENT_NAME, checkpointer=self._checkpointer)
 
-    async def invoke(self, messages: Messages) -> str:
+    async def invoke(self, messages: Messages, *, thread_id: str | None = None) -> ResearchResult:
         result = await self._graph.ainvoke(
             {"messages": messages},
-            config={"recursion_limit": self._settings.agent_max_iterations * 2},
+            config={
+                "recursion_limit": self._settings.agent_max_iterations * 6 + 10,
+                "configurable": {"thread_id": thread_id or "default"},
+            },
         )
-        final = result["messages"][-1]
-        return final.content if isinstance(final.content, str) else str(final.content)
+        return result["result"]
