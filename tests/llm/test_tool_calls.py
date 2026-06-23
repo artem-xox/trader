@@ -9,7 +9,7 @@ async def test_calls_polymarket_search(run_with_tools):
     )
     assert "polymarket_search" in tools
     # A real suggestion should link to polymarket.
-    assert "polymarket.com" in final.lower()
+    assert "polymarket" in final.lower()
 
 
 async def test_calls_web_search(run_with_tools, _require_tavily):

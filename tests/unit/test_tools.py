@@ -1,6 +1,6 @@
 """Tests for agent tools.
 
-`_parse_market` is pure and tested offline. The live `polymarket_search` call is marked
+`parse_market` is pure and tested offline. The live `polymarket_search` call is marked
 so it can be skipped in CI without network.
 """
 
@@ -10,7 +10,8 @@ import json
 
 import pytest
 
-from trader.core.tools import _parse_market, polymarket_search
+from trader.core.clients import parse_market
+from trader.core.tools import polymarket_search
 
 
 def test_parse_market_normalizes_prices():
@@ -26,7 +27,7 @@ def test_parse_market_normalizes_prices():
         "liquidity": "500",
         "endDate": "2026-01-01T00:00:00Z",
     }
-    parsed = _parse_market(raw, event_slug="weather-event")
+    parsed = parse_market(raw, event_slug="weather-event")
     assert parsed["market_id"] == "123"
     assert parsed["implied_probability"] == {"Yes": 0.3, "No": 0.7}
     assert parsed["url"] == "https://polymarket.com/event/weather-event"
@@ -35,7 +36,7 @@ def test_parse_market_normalizes_prices():
 
 def test_parse_market_skips_closed():
     raw = {"id": "1", "closed": True, "active": False}
-    assert _parse_market(raw, None) is None
+    assert parse_market(raw, None) is None
 
 
 @pytest.mark.live
