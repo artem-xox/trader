@@ -5,11 +5,11 @@ install:
 
 # Run the FastAPI agent app (serves the agent over HTTP)
 app:
-	uv run uvicorn trader.agent.app.main:app --reload --port 8000
+	uv run uvicorn trader.app.main:app --reload --port 8000
 
 # Run the Telegram bot (long-polling). Requires the app to be running.
 bot:
-	uv run python -m trader.bot.main
+	uv run python -m trader.ui.telegram.main
 
 test:
 	uv run pytest -q tests/unit

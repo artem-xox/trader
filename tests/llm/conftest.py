@@ -30,11 +30,17 @@ def _require_openai():
         pytest.skip("OPENAI_API_KEY not set")
 
 
+@pytest.fixture
+def _require_tavily():
+    if not os.getenv("TAVILY_API_KEY"):
+        pytest.skip("TAVILY_API_KEY not set")
+
+
 @pytest.fixture(scope="module")
 def agent():
-    from trader.agent.core.agent import TradingAgent
+    from trader.core.agents.builtin import BuiltinAgent
 
-    return TradingAgent()
+    return BuiltinAgent()
 
 
 @pytest.fixture

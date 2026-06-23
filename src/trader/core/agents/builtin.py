@@ -10,14 +10,14 @@ from __future__ import annotations
 from langchain_openai import ChatOpenAI
 from langgraph.prebuilt import create_react_agent
 
-from trader.agent.core.prompts import SYSTEM_PROMPT
-from trader.agent.core.tools import ALL_TOOLS
-from trader.common.config import Settings, get_settings
+from trader.core.agents.base import BaseAgent
+from trader.core.prompts import SYSTEM_PROMPT
+from trader.core.tools import ALL_TOOLS
 
 
-class TradingAgent:
-    def __init__(self, settings: Settings | None = None) -> None:
-        self._settings = settings or get_settings()
+class BuiltinAgent(BaseAgent):
+    def __init__(self) -> None:
+        super().__init__()
         model = ChatOpenAI(
             model=self._settings.openai_model,
             api_key=self._settings.openai_api_key,
@@ -27,10 +27,10 @@ class TradingAgent:
             model,
             tools=ALL_TOOLS,
             prompt=SYSTEM_PROMPT,
-            name="default-react",
+            name="prebuilt-react",
         )
 
-    async def run(self, message: str) -> str:
+    async def invoke(self, message: str) -> str:
         """Run the ReAct loop for a single user message and return the final answer."""
         result = await self._graph.ainvoke(
             {"messages": [{"role": "user", "content": message}]},

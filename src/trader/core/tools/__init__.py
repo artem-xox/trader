@@ -73,10 +73,13 @@ async def polymarket_search(query: str, limit: int = 8) -> str:
     markets before suggesting any bet — never invent markets.
     """
     params = {"q": query, "limit_per_type": max(1, min(limit, 20))}
-    async with httpx.AsyncClient(timeout=_TIMEOUT) as client:
-        resp = await client.get(f"{GAMMA_BASE_URL}/public-search", params=params)
-        resp.raise_for_status()
-        data = resp.json()
+    try:
+        async with httpx.AsyncClient(timeout=_TIMEOUT) as client:
+            resp = await client.get(f"{GAMMA_BASE_URL}/public-search", params=params)
+            resp.raise_for_status()
+            data = resp.json()
+    except httpx.HTTPError as exc:
+        return f"Polymarket search failed: {exc}"
 
     markets: list[dict] = []
     for event in data.get("events", []):
@@ -104,13 +107,16 @@ async def web_search(query: str, max_results: int = 5) -> str:
     mispriced. Returns a JSON object with a synthesized `answer` and a list of `results`
     (title, url, published date, snippet).
     """
-    client = AsyncTavilyClient(api_key=get_settings().tavily_api_key)
-    resp = await client.search(
-        query,
-        max_results=max(1, min(max_results, 10)),
-        search_depth="basic",
-        include_answer=True,
-    )
+    try:
+        client = AsyncTavilyClient(api_key=get_settings().tavily_api_key)
+        resp = await client.search(
+            query,
+            max_results=max(1, min(max_results, 10)),
+            search_depth="basic",
+            include_answer=True,
+        )
+    except Exception as exc:  # noqa: BLE001 - return a tool error the model can handle
+        return f"Web search failed: {exc}"
 
     results = [
         {

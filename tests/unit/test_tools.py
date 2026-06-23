@@ -10,7 +10,7 @@ import json
 
 import pytest
 
-from trader.agent.core.tools import _parse_market, polymarket_search
+from trader.core.tools import _parse_market, polymarket_search
 
 
 def test_parse_market_normalizes_prices():

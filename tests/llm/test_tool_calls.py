@@ -12,8 +12,9 @@ async def test_calls_polymarket_search(run_with_tools):
     assert "polymarket.com" in final.lower()
 
 
-async def test_calls_web_search(run_with_tools):
+async def test_calls_web_search(run_with_tools, _require_tavily):
     _, tools = await run_with_tools(
-        "Search the web for the latest news about the GTA VI release date."
+        "Use the web_search tool (not polymarket_search) to find the latest news "
+        "about the GTA VI release date."
     )
     assert "web_search" in tools

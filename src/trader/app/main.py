@@ -12,8 +12,8 @@ from contextlib import asynccontextmanager
 from dotenv import load_dotenv
 from fastapi import FastAPI
 
-from trader.agent.app.schemas import InvokeRequest, InvokeResponse
-from trader.agent.core.agent import TradingAgent
+from trader.core.agent import TradingAgent
+from trader.app.schemas import InvokeRequest, InvokeResponse
 
 load_dotenv()  # so LANGSMITH_* and other vars are present for LangChain tracing
 
