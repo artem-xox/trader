@@ -46,7 +46,7 @@ def agent():
 
 @pytest.fixture
 def invoke_prompt(agent):
-    """Run the agent on a single user prompt and return the structured ResearchResult."""
+    """Run the agent on a single user prompt and return the structured result."""
     from langchain_core.messages import HumanMessage
 
     async def _invoke(prompt: str):
@@ -56,21 +56,32 @@ def invoke_prompt(agent):
 
 
 @pytest.fixture
-def run_with_tools(agent):
-    """Run the agent on a prompt, returning (result, list_of_tool_names_called).
+def run_state(agent):
+    """Run the agent on a fresh thread and return the full final graph state.
 
-    Reaches into the compiled graph (not the public API) to inspect which tools fired.
+    Reaches into the compiled graph (not the public API) so tests can inspect the chosen
+    skill, the structured result, and which tools fired.
     """
     from langchain_core.messages import HumanMessage
 
-    async def _run(prompt: str):
-        state = await agent._graph.ainvoke(
+    async def _run(prompt: str) -> dict:
+        return await agent._graph.ainvoke(
             {"messages": [HumanMessage(prompt)]},
             config={
                 "recursion_limit": agent._settings.agent_max_iterations * 6 + 10,
                 "configurable": {"thread_id": uuid.uuid4().hex},
             },
         )
+
+    return _run
+
+
+@pytest.fixture
+def run_with_tools(run_state):
+    """Run the agent on a prompt, returning (result, list_of_tool_names_called)."""
+
+    async def _run(prompt: str):
+        state = await run_state(prompt)
         tools = [m.name for m in state["messages"] if getattr(m, "type", None) == "tool"]
         return state["result"], tools
 

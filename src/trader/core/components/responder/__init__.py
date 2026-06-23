@@ -1,9 +1,9 @@
 """Responder — synthesizes the loop's conclusion into the structured output contract.
 
-Runs once on the "answer" branch (the planner stopped requesting tools, or the
-iteration budget ran out). It re-reads the conversation and coerces it into a
-`ResearchResult` via structured output, so callers consume structure, not prose. The
-emitted `AIMessage` carries the human-readable summary for the conversation history.
+Runs once on the "answer" branch (the planner stopped requesting tools, or the iteration
+budget ran out). The active skill chooses the output schema and prompt; in normal mode a
+generic `GeneralAnswer` is produced. The emitted `AIMessage` carries the human-readable
+summary for the conversation history.
 """
 
 from __future__ import annotations
@@ -11,16 +11,29 @@ from __future__ import annotations
 from langchain_core.language_models import BaseChatModel
 from langchain_core.messages import AIMessage, SystemMessage
 
-from trader.core.models.domain import ResearchResult
+from trader.core.models.domain import SkillResult
 from trader.core.models.schemas import AgentState, ResponderResponse
-from trader.core.prompts import RESPONDER_PROMPT
+from trader.core.skills.base import SkillRegistry
 
 
 class Responder:
-    def __init__(self, model: BaseChatModel) -> None:
-        self._model = model.with_structured_output(ResearchResult)
+    def __init__(
+        self,
+        model: BaseChatModel,
+        registry: SkillRegistry,
+        base_prompt: str,
+        default_schema: type[SkillResult],
+    ) -> None:
+        self._model = model
+        self._registry = registry
+        self._base_prompt = base_prompt
+        self._default_schema = default_schema
 
     async def __call__(self, state: AgentState) -> ResponderResponse:
-        messages = [SystemMessage(RESPONDER_PROMPT), *state["messages"]]
-        result: ResearchResult = await self._model.ainvoke(messages)
+        skill = self._registry.get(state.get("skill"))
+        prompt = self._base_prompt if skill is None else skill.responder_prompt
+        schema = self._default_schema if skill is None else skill.output_schema
+
+        structured = self._model.with_structured_output(schema)
+        result: SkillResult = await structured.ainvoke([SystemMessage(prompt), *state["messages"]])
         return {"result": result, "messages": [AIMessage(result.summary)]}

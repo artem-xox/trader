@@ -14,7 +14,11 @@ from __future__ import annotations
 from langchain_core.tools import BaseTool, tool
 
 from trader.core.clients import PolymarketClient, TavilyClient
-from trader.core.tools.schemas import PolymarketSearchInput, WebSearchInput
+from trader.core.tools.schemas import (
+    PolymarketMarketInput,
+    PolymarketSearchInput,
+    WebSearchInput,
+)
 
 
 def build_tools(polymarket: PolymarketClient, tavily: TavilyClient) -> list[BaseTool]:
@@ -28,6 +32,17 @@ def build_tools(polymarket: PolymarketClient, tavily: TavilyClient) -> list[Base
         """
         return await polymarket.search(query, limit=limit)
 
+    @tool(args_schema=PolymarketMarketInput)
+    async def polymarket_market(slug: str) -> str:
+        """Fetch full detail for a specific Polymarket market by its slug.
+
+        The slug is the last path segment of a polymarket.com URL. Returns a JSON list of
+        the market(s) at that slug with question, resolution criteria (`description`),
+        current implied probabilities, volume, liquidity, end date, and closed flag. Use
+        this to analyze a single market the user pointed to.
+        """
+        return await polymarket.market(slug)
+
     @tool(args_schema=WebSearchInput)
     async def web_search(query: str, max_results: int = 5) -> str:
         """Search the web for current information, news, and context on any topic.
@@ -39,4 +54,4 @@ def build_tools(polymarket: PolymarketClient, tavily: TavilyClient) -> list[Base
         """
         return await tavily.search(query, max_results=max_results)
 
-    return [polymarket_search, web_search]
+    return [polymarket_search, polymarket_market, web_search]

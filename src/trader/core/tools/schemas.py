@@ -17,6 +17,12 @@ class PolymarketSearchInput(BaseModel):
     )
 
 
+class PolymarketMarketInput(BaseModel):
+    slug: str = Field(
+        description="Market or event slug — the last path segment of a polymarket.com URL.",
+    )
+
+
 class WebSearchInput(BaseModel):
     query: str = Field(
         description="Search query for current news, facts, and context on a topic.",

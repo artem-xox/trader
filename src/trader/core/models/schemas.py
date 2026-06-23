@@ -8,7 +8,7 @@ from typing import Annotated, NotRequired, TypedDict
 from langchain_core.messages import AnyMessage, ToolMessage
 from langgraph.graph.message import add_messages
 
-from trader.core.models.domain import ResearchResult
+from trader.core.models.domain import SkillResult
 
 # The conversation passed in/out of the agent. New messages are appended to the
 # per-thread state owned by the graph checkpointer (keyed by thread_id).
@@ -37,12 +37,20 @@ class ReviewVerdict(StrEnum):
 
 class AgentState(TypedDict):
     messages: Annotated[Messages, add_messages]
+    # Active skill *name* for this turn; "" (or absent) means normal mode. We store the
+    # name (not the Skill object) because the checkpointer serializes the state, and a
+    # Skill carries non-serializable tools/schema; the nodes resolve it via the registry.
+    skill: NotRequired[str]
     # Number of planner (reasoning) steps taken so far — the real loop budget.
     iteration: NotRequired[int]
     guard_verdict: NotRequired[GuardVerdict]
     review_verdict: NotRequired[ReviewVerdict]
     # The structured final answer, produced by the responder before the loop ends.
-    result: NotRequired[ResearchResult]
+    result: NotRequired[SkillResult]
+
+
+class SelectorResponse(TypedDict):
+    skill: str
 
 
 class PlannerResponse(TypedDict):
@@ -61,7 +69,7 @@ class ExecutorResponse(TypedDict):
 
 
 class ResponderResponse(TypedDict):
-    result: ResearchResult
+    result: SkillResult
     messages: Messages
 
 

@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from typing import Protocol, runtime_checkable
 
-from trader.core.models.domain import ResearchResult
+from trader.core.models.domain import SkillResult
 from trader.core.models.schemas import (
     AgentState,
     ExecutorResponse,
@@ -16,8 +16,16 @@ from trader.core.models.schemas import (
     Messages,
     PlannerResponse,
     ResponderResponse,
+    SelectorResponse,
     VerifierResponse,
 )
+
+
+@runtime_checkable
+class Selector(Protocol):
+    """First node: picks at most one skill for the turn (or normal mode)."""
+
+    async def __call__(self, state: AgentState) -> SelectorResponse: ...
 
 
 @runtime_checkable
@@ -57,10 +65,10 @@ class Verifier(Protocol):
 
 @runtime_checkable
 class Agent(Protocol):
-    """An agent runs a research turn for a thread and returns the structured result.
+    """An agent runs a turn for a thread and returns the structured result.
 
     Conversation history is owned by the graph checkpointer (keyed by `thread_id`); the
     caller passes only the new message(s).
     """
 
-    async def invoke(self, messages: Messages, *, thread_id: str | None = None) -> ResearchResult: ...
+    async def invoke(self, messages: Messages, *, thread_id: str | None = None) -> SkillResult: ...

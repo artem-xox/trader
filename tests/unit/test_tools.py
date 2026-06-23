@@ -11,6 +11,7 @@ import json
 import pytest
 
 from trader.core.clients import PolymarketClient, TavilyClient, parse_market
+from trader.core.clients.polymarket import parse_market_detail
 from trader.core.tools import build_tools
 
 
@@ -37,6 +38,28 @@ def test_parse_market_normalizes_prices():
 def test_parse_market_skips_closed():
     raw = {"id": "1", "closed": True, "active": False}
     assert parse_market(raw, None) is None
+
+
+def test_parse_market_detail_keeps_closed_and_description():
+    raw = {
+        "id": "9",
+        "question": "Will X happen?",
+        "description": "Resolves YES if X.",
+        "slug": "will-x",
+        "closed": True,
+        "active": False,
+        "outcomes": json.dumps(["Yes", "No"]),
+        "outcomePrices": json.dumps(["0.4", "0.6"]),
+        "volume": "10",
+        "liquidity": "5",
+        "endDate": "2026-01-01T00:00:00Z",
+    }
+    detail = parse_market_detail(raw)
+    assert detail["market_id"] == "9"
+    assert detail["closed"] is True  # unlike parse_market, detail keeps closed markets
+    assert detail["description"] == "Resolves YES if X."
+    assert detail["implied_probability"] == {"Yes": 0.4, "No": 0.6}
+    assert detail["url"] == "https://polymarket.com/market/will-x"
 
 
 @pytest.mark.live

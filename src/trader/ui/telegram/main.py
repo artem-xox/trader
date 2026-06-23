@@ -65,18 +65,28 @@ async def cmd_help(message: Message) -> None:
     await message.answer(
         "👋 I'm AI Trader.\n\n"
         "Just send me a topic and I'll research interesting Polymarket bets.\n"
-        "You can also use /find <topic>.\n"
-        "Example: bitcoin price 2026"
+        "• /find <topic> — find interesting bets on a topic.\n"
+        "• /analyze <market url> — deep dive on one market with a risk model.\n"
+        "Example: /find bitcoin price 2026"
     )
 
 
 @dp.message(Command("find"))
 async def cmd_find(message: Message, command: CommandObject) -> None:
-    topic = (command.args or "").strip()
-    if not topic:
+    if not (command.args or "").strip():
         await message.answer("Usage: /find <topic>")
         return
-    await _research_and_reply(message, topic)
+    # Forward the full text (incl. "/find") so the agent's skills node activates `find`.
+    await _research_and_reply(message, message.text)
+
+
+@dp.message(Command("analyze"))
+async def cmd_analyze(message: Message, command: CommandObject) -> None:
+    if not (command.args or "").strip():
+        await message.answer("Usage: /analyze <market url>")
+        return
+    # Forward the full text (incl. "/analyze") so the agent's skills node activates `analyze`.
+    await _research_and_reply(message, message.text)
 
 
 @dp.message(F.text & ~F.text.startswith("/"))

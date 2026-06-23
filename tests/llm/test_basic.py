@@ -1,14 +1,12 @@
-"""Basic LLM smoke test — the agent runs end-to-end and returns a structured result."""
+"""Basic LLM smoke test — normal mode answers a simple instruction end-to-end."""
 
 from __future__ import annotations
 
+from trader.core.models.domain import GeneralAnswer
 
-async def test_returns_grounded_answer(invoke_prompt):
-    """An off-domain prompt still yields a coherent summary and no invented markets.
 
-    The agent always synthesizes a `ResearchResult`; with no market context it must
-    answer in the summary and leave `suggestions` empty (anti-hallucination holds).
-    """
+async def test_normal_mode_follows_instruction(invoke_prompt):
+    """No skill applies → normal mode returns a plain GeneralAnswer echoing the reply."""
     result = await invoke_prompt("Reply with exactly the single word: pong")
-    assert result.summary.strip()
-    assert result.suggestions == []
+    assert isinstance(result, GeneralAnswer)
+    assert "pong" in result.summary.lower()

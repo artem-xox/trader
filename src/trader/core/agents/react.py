@@ -4,14 +4,16 @@ This module owns only the loop topology — the transitions between components a
 they compile into a graph. The behaviour lives in `trader.core.components`; the model
 and checkpointer are injected (see `trader.core.bootstrap`).
 
-    START → planner ──tool_calls?──→ guard ──allow?──→ executor ──budget?──→ planner
-                    │                     └──block───→ planner   │  (else)    └─→ responder
-                    └──final answer──────────────────────────────→ responder → verifier ──ok?──→ END
-                                                                                          └──revise──→ planner
+    START → skills → planner ──tool_calls?──→ guard ──allow?──→ executor ──budget?──→ planner
+                             │                     └──block───→ planner   │  (else)    └─→ responder
+                             └──final answer──────────────────────────────→ responder → verifier ──ok?──→ END
+                                                                                                  └──revise──→ planner
 
-The loop budget is the `iteration` counter (planner steps), not `recursion_limit`:
-once it is exhausted the executor routes straight to the responder (so the requested
-tools still run and the history stays valid) and the verifier stops revising.
+The `skills` node picks at most one skill for the turn (or normal mode); the planner,
+guard and responder adapt to it. The loop budget is the `iteration` counter (planner
+steps), not `recursion_limit`: once it is exhausted the executor routes straight to the
+responder (so the requested tools still run and the history stays valid) and the verifier
+stops revising.
 """
 
 from __future__ import annotations
@@ -21,8 +23,8 @@ from langgraph.graph import END, START, StateGraph
 
 from trader.common.config import Settings
 from trader.core.agents.base import BaseAgent
-from trader.core.models.domain import ResearchResult
-from trader.core.models.protocols import Executor, Guard, Planner, Responder, Verifier
+from trader.core.models.domain import SkillResult
+from trader.core.models.protocols import Executor, Guard, Planner, Responder, Selector, Verifier
 from trader.core.models.schemas import AgentState, GuardVerdict, Messages, PlannerAction, ReviewVerdict
 
 
@@ -33,6 +35,7 @@ class ReActAgent(BaseAgent):
     def __init__(
         self,
         *,
+        selector: Selector,
         planner: Planner,
         guard: Guard,
         executor: Executor,
@@ -42,6 +45,7 @@ class ReActAgent(BaseAgent):
         settings: Settings | None = None,
     ) -> None:
         super().__init__(settings)
+        self._selector = selector
         self._planner = planner
         self._guard = guard
         self._executor = executor
@@ -77,13 +81,15 @@ class ReActAgent(BaseAgent):
 
         builder = StateGraph(AgentState)
 
+        builder.add_node("skills", self._selector)
         builder.add_node("planner", self._planner)
         builder.add_node("guard", self._guard)
         builder.add_node("executor", self._executor)
         builder.add_node("responder", self._responder)
         builder.add_node("verifier", self._verifier)
 
-        builder.add_edge(START, "planner")
+        builder.add_edge(START, "skills")
+        builder.add_edge("skills", "planner")
         builder.add_conditional_edges(
             "planner",
             self._route_after_planner,
@@ -108,7 +114,7 @@ class ReActAgent(BaseAgent):
 
         return builder.compile(name=self.AGENT_NAME, checkpointer=self._checkpointer)
 
-    async def invoke(self, messages: Messages, *, thread_id: str | None = None) -> ResearchResult:
+    async def invoke(self, messages: Messages, *, thread_id: str | None = None) -> SkillResult:
         result = await self._graph.ainvoke(
             {"messages": messages},
             config={

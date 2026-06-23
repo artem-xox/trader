@@ -35,7 +35,10 @@ services:
         scope: RUN_TIME
         type: SECRET
         value: REPLACE_IN_DASHBOARD
-      - key: OPENAI_MODEL
+      - key: OPENAI_MODEL_STRONG
+        scope: RUN_TIME
+        value: gpt-4.1
+      - key: OPENAI_MODEL_WEAK
         scope: RUN_TIME
         value: gpt-4.1-mini
       - key: TAVILY_API_KEY

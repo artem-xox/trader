@@ -9,7 +9,8 @@ Contract:
 
 The check it enforces is anti-hallucination: every suggested `market_id` must actually
 appear in the polymarket tool results gathered during the loop. This is the guarantee
-that makes the recommendations trustworthy.
+that makes the recommendations trustworthy. Results without `suggestions` (e.g. normal
+mode's `GeneralAnswer`) have nothing to validate and pass through.
 """
 
 from __future__ import annotations
@@ -20,32 +21,31 @@ from langchain_core.messages import SystemMessage
 
 from trader.core.models.schemas import AgentState, ReviewVerdict, VerifierResponse
 
-_POLYMARKET_TOOL = "polymarket_search"
-
 
 def _market_ids_seen(state: AgentState) -> set[str]:
-    """Collect every market_id returned by the polymarket tool during this run."""
+    """Collect every market_id returned by any tool during this run."""
     ids: set[str] = set()
     for message in state["messages"]:
-        if getattr(message, "type", None) != "tool" or message.name != _POLYMARKET_TOOL:
+        if getattr(message, "type", None) != "tool":
             continue
         try:
             markets = json.loads(message.content)
         except (TypeError, ValueError):
             continue  # tool returned an error/"no results" string, not JSON
         if isinstance(markets, list):
-            ids.update(str(m["market_id"]) for m in markets if m.get("market_id"))
+            ids.update(str(m["market_id"]) for m in markets if isinstance(m, dict) and m.get("market_id"))
     return ids
 
 
 class Verifier:
     async def __call__(self, state: AgentState) -> VerifierResponse:
         result = state.get("result")
-        if result is None or not result.suggestions:
+        referenced = result.referenced_market_ids() if result else []
+        if not referenced:
             return {"review_verdict": ReviewVerdict.OK}
 
         seen = _market_ids_seen(state)
-        invented = [s.market_id for s in result.suggestions if s.market_id not in seen]
+        invented = [mid for mid in referenced if mid not in seen]
         if invented:
             return {
                 "review_verdict": ReviewVerdict.REVISE,
