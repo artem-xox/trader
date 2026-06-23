@@ -1,0 +1,88 @@
+# DigitalOcean App Platform spec for AI Trader.
+#
+# Two components built from the same Dockerfile:
+#   - agent    : FastAPI service (public, health-checked) that serves the ReAct agent.
+#   - telegram : worker running the aiogram bot via long-polling; it calls the agent
+#                over the internal network (${agent.PRIVATE_URL}).
+#
+# Deploy:
+#   doctl apps create --spec .do/app.yaml          # first time
+#   doctl apps update <APP_ID> --spec .do/app.yaml # subsequent changes
+#
+# SECRET values below are placeholders — set the real values in the DO dashboard
+# (App → Settings → component → Environment Variables) or via `doctl`. Do NOT commit
+# real secrets here.
+name: ai-trader
+region: fra
+
+services:
+  - name: agent
+    dockerfile_path: Dockerfile
+    source_dir: /
+    github:
+      repo: artem-xox/trader
+      branch: main
+      deploy_on_push: true
+    instance_count: 1
+    instance_size_slug: basic-xs
+    http_port: 8080
+    health_check:
+      http_path: /health
+      initial_delay_seconds: 20
+      period_seconds: 15
+    envs:
+      - key: OPENAI_API_KEY
+        scope: RUN_TIME
+        type: SECRET
+        value: REPLACE_IN_DASHBOARD
+      - key: OPENAI_MODEL
+        scope: RUN_TIME
+        value: gpt-4.1-mini
+      - key: TAVILY_API_KEY
+        scope: RUN_TIME
+        type: SECRET
+        value: REPLACE_IN_DASHBOARD
+      - key: AGENT_MAX_ITERATIONS
+        scope: RUN_TIME
+        value: "8"
+      - key: LANGSMITH_TRACING
+        scope: RUN_TIME
+        value: "true"
+      - key: LANGSMITH_API_KEY
+        scope: RUN_TIME
+        type: SECRET
+        value: REPLACE_IN_DASHBOARD
+      - key: LANGSMITH_PROJECT
+        scope: RUN_TIME
+        value: trader
+      - key: AGENT_API_KEY
+        scope: RUN_TIME
+        type: SECRET
+        value: REPLACE_IN_DASHBOARD
+
+workers:
+  - name: telegram
+    dockerfile_path: Dockerfile
+    source_dir: /
+    github:
+      repo: artem-xox/trader
+      branch: main
+      deploy_on_push: true
+    instance_count: 1
+    instance_size_slug: basic-xxs
+    run_command: uv run python -m trader.ui.telegram.main
+    envs:
+      - key: TELEGRAM_API_TOKEN
+        scope: RUN_TIME
+        type: SECRET
+        value: REPLACE_IN_DASHBOARD
+      - key: TELEGRAM_ALLOWED_CHAT_IDS
+        scope: RUN_TIME
+        value: ""
+      - key: AGENT_APP_URL
+        scope: RUN_TIME
+        value: ${agent.PRIVATE_URL}
+      - key: AGENT_API_KEY
+        scope: RUN_TIME
+        type: SECRET
+        value: REPLACE_IN_DASHBOARD

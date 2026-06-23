@@ -43,6 +43,10 @@ class Settings(BaseSettings):
         default="http://127.0.0.1:8000",
         description="Base URL the bot uses to reach the agent HTTP app",
     )
+    agent_api_key: str = Field(
+        default="",
+        description="Shared secret for X-API-Key header; empty = no auth (dev only)",
+    )
 
     # --- Observability (LangSmith) ---
     # Standard LangChain vars; declared so they are visible/validated in one spot.

@@ -34,8 +34,9 @@ def _allowed(chat_id: int) -> bool:
 
 async def _ask_agent(message: str, thread_id: str) -> str:
     url = f"{settings.agent_app_url}/agent/invoke"
+    headers = {"X-API-Key": settings.agent_api_key} if settings.agent_api_key else {}
     async with httpx.AsyncClient(timeout=httpx.Timeout(120.0)) as client:
-        resp = await client.post(url, json={"message": message, "thread_id": thread_id})
+        resp = await client.post(url, json={"message": message, "thread_id": thread_id}, headers=headers)
         resp.raise_for_status()
         return resp.json()["response"]
 
