@@ -46,12 +46,11 @@ def agent():
 
 @pytest.fixture
 def invoke_prompt(agent):
-    """Run the agent on a single user prompt and return the result summary text."""
+    """Run the agent on a single user prompt and return the structured ResearchResult."""
     from langchain_core.messages import HumanMessage
 
-    async def _invoke(prompt: str) -> str:
-        result = await agent.invoke([HumanMessage(prompt)], thread_id=uuid.uuid4().hex)
-        return result.summary
+    async def _invoke(prompt: str):
+        return await agent.invoke([HumanMessage(prompt)], thread_id=uuid.uuid4().hex)
 
     return _invoke
 

@@ -10,7 +10,7 @@ from __future__ import annotations
 
 from functools import lru_cache
 
-from pydantic import Field
+from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -36,6 +36,22 @@ class Settings(BaseSettings):
         default_factory=list,
         description="Allowlist of chat IDs; empty means allow everyone (dev only)",
     )
+
+    @field_validator("telegram_allowed_chat_ids", mode="before")
+    @classmethod
+    def _parse_telegram_allowed_chat_ids(cls, value: object) -> list[int]:
+        if value is None or value == "":
+            return []
+        if isinstance(value, int):
+            return [value]
+        if isinstance(value, list):
+            return [int(item) for item in value]
+        if isinstance(value, str):
+            stripped = value.strip()
+            if not stripped:
+                return []
+            return [int(item.strip()) for item in stripped.split(",") if item.strip()]
+        raise TypeError(f"Unsupported chat ID value: {value!r}")
 
     # --- Agent ---
     agent_max_iterations: int = Field(default=8, description="ReAct loop hard cap")
