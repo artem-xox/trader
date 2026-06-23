@@ -26,7 +26,12 @@ packages = ["src/trader"]
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
-markers = ["live: hits external network APIs"]
+# Default run is offline & free: exclude network/LLM smoke tests.
+addopts = "-m 'not live and not llm'"
+markers = [
+    "live: hits external network APIs",
+    "llm: makes real LLM calls (costs money, needs OPENAI_API_KEY)",
+]
 
 [dependency-groups]
 dev = [

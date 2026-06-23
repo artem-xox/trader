@@ -12,7 +12,11 @@ bot:
 	uv run python -m trader.bot.main
 
 test:
-	uv run pytest -q
+	uv run pytest -q tests/unit
+
+# LLM smoke tests — real model calls, needs OPENAI_API_KEY in .env
+test-llm:
+	uv run pytest -q -m llm tests/llm
 
 lint:
 	uv run ruff check src tests
