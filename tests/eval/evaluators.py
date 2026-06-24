@@ -80,8 +80,9 @@ class Routing:
         expected = sample.case.expected_skill
         if not expected:
             return None
-        ok = sample.skill == expected
-        return Score(self.key, 1.0 if ok else 0.0, f"expected {expected!r}, got {sample.skill!r}")
+        actual = sample.skill or "normal"  # empty skill == normal mode
+        ok = actual == expected
+        return Score(self.key, 1.0 if ok else 0.0, f"expected {expected!r}, got {actual!r}")
 
 
 class ToolCalls:
@@ -161,6 +162,8 @@ class Depth:
         self._model = model.with_structured_output(_Judgement)
 
     async def evaluate(self, sample: EvalSample) -> Score | None:
+        if not sample.skill:
+            return None  # depth/expertise is a domain-analysis metric; skip normal-mode tasks
         prompt = _DEPTH_PROMPT.format(
             input=sample.case.input,
             answer=json.dumps(sample.result, ensure_ascii=False, indent=2),

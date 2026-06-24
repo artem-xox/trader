@@ -25,12 +25,12 @@ class Settings(BaseSettings):
     openai_api_key: str = Field(default="", description="OpenAI API key")
     
     # Two tiers: a stronger model for planning (the reasoning step) and a lighter one for
-    # the supporting components (skill selection, guard, response synthesis).
+    # the supporting components (skill selection, guard, verifier).
     openai_model_strong: str = Field(
-        default="gpt-4.1", description="Model for the planner",
+        default="gpt-5.4", description="Model for the planner / responder",
     )
     openai_model_weak: str = Field(
-        default="gpt-4.1-mini", description="Model for selector / guard / responder"
+        default="gpt-5.4-mini", description="Model for selector / guard / verifier"
     )
 
     # --- Web search ---

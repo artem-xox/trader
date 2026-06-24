@@ -47,6 +47,13 @@ async def run_agent(agent: Agent, case: Case) -> EvalSample:
 class EvalBackend(Protocol):
     """Hosts an evaluation run for a vendor (datasets, trace linkage, scores)."""
 
-    async def run(self, skill: str, cases: list[Case], evaluators: list[Evaluator]) -> str:
+    async def run(
+        self,
+        skill: str,
+        cases: list[Case],
+        evaluators: list[Evaluator],
+        *,
+        experiment_name: str | None = None,
+    ) -> str:
         """Run every case, score it, and return a human-pointer to the results (e.g. URL)."""
         ...

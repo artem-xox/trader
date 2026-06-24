@@ -38,28 +38,51 @@ class LangSmithBackend:
         self._client = client or Client()
 
     def _sync(self, skill: str, cases: list[Case]) -> None:
-        """Upsert the skill's dataset to exactly the current YAML cases."""
-        name = _dataset_name(skill)
-        if self._client.has_dataset(dataset_name=name):
-            for example in self._client.list_examples(dataset_name=name):
-                self._client.delete_example(example.id)
-        else:
-            self._client.create_dataset(name, description=f"Trader eval cases — {skill} skill")
-        self._client.create_examples(
-            dataset_name=name,
-            examples=[
-                {
-                    "inputs": {"id": case.id, "input": case.input},
-                    "outputs": {"expected_skill": case.expected_skill, "rubric": case.rubric},
-                    "metadata": {"skill": case.skill, "source": case.source, "trace_id": case.trace_id},
-                }
-                for case in cases
-            ],
-        )
+        """Upsert the dataset to the current YAML cases, keyed by the stable case `id`.
 
-    async def run(self, skill: str, cases: list[Case], evaluators: list[Evaluator]) -> str:
+        Crucially this preserves each example's id across runs (update in place, don't
+        delete+recreate): LangSmith links experiment runs to examples by id, so recreating
+        examples would orphan every earlier experiment ("no run for this example") and break
+        cross-experiment comparison. Only genuinely removed cases are deleted.
+        """
+        name = _dataset_name(skill)
+        if not self._client.has_dataset(dataset_name=name):
+            dataset = self._client.create_dataset(name, description=f"Trader eval cases — {skill} skill")
+        else:
+            dataset = self._client.read_dataset(dataset_name=name)
+
+        existing = {ex.inputs.get("id"): ex for ex in self._client.list_examples(dataset_name=name)}
+        to_create = []
+        for case in cases:
+            payload = {
+                "inputs": {"id": case.id, "input": case.input},
+                "outputs": {"expected_skill": case.expected_skill, "rubric": case.rubric},
+                "metadata": {"skill": case.skill, "source": case.source, "trace_id": case.trace_id},
+            }
+            example = existing.get(case.id)
+            if example is not None:
+                self._client.update_example(example.id, **payload)
+            else:
+                to_create.append(payload)
+        if to_create:
+            self._client.create_examples(dataset_id=dataset.id, examples=to_create)
+        for case_id, example in existing.items():
+            if case_id not in {c.id for c in cases}:
+                self._client.delete_example(example.id)
+
+    async def run(
+        self,
+        skill: str,
+        cases: list[Case],
+        evaluators: list[Evaluator],
+        *,
+        experiment_name: str | None = None,
+    ) -> str:
         self._sync(skill, cases)
         by_id = {case.id: case for case in cases}
+        prefix = f"trader-{skill}"
+        if experiment_name:
+            prefix = f"{prefix}-{experiment_name}"
 
         async def target(inputs: dict) -> dict:
             return _sample_payload(await run_agent(self._agent, by_id[inputs["id"]]))
@@ -68,7 +91,7 @@ class LangSmithBackend:
             target,
             data=_dataset_name(skill),
             evaluators=[_adapt(ev, by_id) for ev in evaluators],
-            experiment_prefix=f"trader-{skill}",
+            experiment_prefix=prefix,
             client=self._client,
             max_concurrency=2,
         )

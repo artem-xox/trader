@@ -6,7 +6,7 @@ from trader.common.config import Settings
 from trader.core.bootstrap import build_agent
 
 
-def test_planner_uses_strong_model_others_weak():
+def test_model_tiers_are_wired_correctly():
     settings = Settings(
         openai_model_strong="strong-x",
         openai_model_weak="weak-y",
@@ -16,4 +16,5 @@ def test_planner_uses_strong_model_others_weak():
     agent = build_agent(settings)
 
     assert agent._planner._model.model_name == "strong-x"
-    assert agent._responder._model.model_name == "weak-y"
+    assert agent._responder._model.model_name == "strong-x"
+    assert agent._selector._model.first.bound.model_name == "weak-y"

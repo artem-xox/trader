@@ -12,6 +12,7 @@ from langchain_core.language_models import BaseChatModel
 from langchain_core.messages import SystemMessage
 from langchain_core.tools import BaseTool
 
+from trader.core.components.planner.prompts import BASE_PLANNER_PROMPT
 from trader.core.models.schemas import AgentState, PlannerResponse
 from trader.core.skills.base import SkillRegistry
 
@@ -21,12 +22,11 @@ class Planner:
         self,
         model: BaseChatModel,
         registry: SkillRegistry,
-        base_prompt: str,
         base_tools: list[BaseTool],
     ) -> None:
         self._model = model
         self._registry = registry
-        self._base_prompt = base_prompt
+        self._base_prompt = BASE_PLANNER_PROMPT
         self._base_tools = base_tools
 
     async def __call__(self, state: AgentState) -> PlannerResponse:

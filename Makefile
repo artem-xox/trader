@@ -19,9 +19,10 @@ test-llm:
 	uv run pytest -q -m llm tests/llm
 
 # Run evaluations (one skill: `make eval SKILL=find`; all skills if SKILL unset).
+# Optional experiment postfix: `make eval NAME=smarter-models` → trader-{skill}-smarter-models.
 # Real model + tool calls; results land in LangSmith. Needs OPENAI/TAVILY/LANGSMITH keys.
 eval:
-	uv run python -m tests.eval.cli run $(if $(SKILL),--skill $(SKILL),)
+	uv run python -m tests.eval.cli run $(if $(SKILL),--skill $(SKILL),) $(if $(NAME),--name $(NAME),)
 
 lint:
 	uv run ruff check src tests

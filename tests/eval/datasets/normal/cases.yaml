@@ -1,0 +1,47 @@
+# `normal` mode eval cases: off-domain tasks (no Polymarket tools) that genuinely require a
+# research loop — looking up current facts, often multi-hop — and synthesizing an answer.
+# They must route to normal mode (no skill), so expected_skill defaults to "normal" (the
+# routing evaluator maps an empty skill -> normal). `rubric` falls back to the skill rubric.
+# Mostly English (7), a few Russian (3). See tests/eval/cases.py.
+
+# --- English ---
+- id: openai-ceo-prior-company
+  input: "Who is the current CEO of OpenAI, and what company did they co-found before it?"
+  source: handcrafted
+
+- id: python-latest-release
+  input: "What is the latest stable version of Python, and in what year was it released?"
+  source: handcrafted
+
+- id: nvidia-vs-apple-mktcap
+  input: "Which company has the larger market capitalization right now, Nvidia or Apple? Give the approximate figures."
+  source: handcrafted
+
+- id: f1-champion-team
+  input: "Who won the most recent Formula 1 World Drivers' Championship, and which team did they drive for?"
+  source: handcrafted
+
+- id: anthropic-latest-model
+  input: "What is the latest Claude model released by Anthropic, and what is notable about it versus the previous one?"
+  source: handcrafted
+
+- id: un-secretary-general
+  input: "Who is the current Secretary-General of the United Nations, and when does their current term end?"
+  source: handcrafted
+
+- id: spacex-latest-starship
+  input: "When was the most recent SpaceX Starship test flight, and was it considered a success?"
+  source: handcrafted
+
+# --- Russian ---
+- id: moscow-mayor
+  input: "Кто сейчас мэр Москвы и с какого года он занимает этот пост?"
+  source: handcrafted
+
+- id: ios-latest-version
+  input: "Какая последняя версия iOS вышла и какие в ней главные нововведения?"
+  source: handcrafted
+
+- id: bitcoin-price-now
+  input: "Сколько сейчас стоит один биткойн в долларах? Найди актуальную цену."
+  source: handcrafted

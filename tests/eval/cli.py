@@ -1,6 +1,6 @@
 """Eval CLI.
 
-    uv run python -m tests.eval.cli run [--skill find]
+    uv run python -m tests.eval.cli run [--skill find] [--name smarter-models]
     uv run python -m tests.eval.cli list
     uv run python -m tests.eval.cli add-case --trace <id> --skill find [--id ...] [--rubric ...]
 
@@ -25,25 +25,31 @@ def _build_backend_and_evaluators():
 
     settings = get_settings()
     agent = build_agent(settings)
-    judge = get_model(settings.openai_model_weak, settings)
+    # Judge at temperature 0 so scores are reproducible across runs (the agent stays at its
+    # default temperature; only the evaluator must be deterministic for a stable baseline).
+    judge = get_model(settings.openai_model_weak, settings, temperature=0.0)
     evaluators = [Grounding(), Routing(), ToolCalls(), Quality(judge), Depth(judge)]
     return LangSmithBackend(agent), evaluators
 
 
-async def _run(skill: str | None) -> None:
+async def _run(skill: str | None, experiment_name: str | None) -> None:
     backend, evaluators = _build_backend_and_evaluators()
     targets = [skill] if skill else skills()
-    for name in targets:
+
+    async def run_one(name: str):
         cases = load_cases(name)
         print(f"running '{name}': {len(cases)} case(s)...")
-        experiment = await backend.run(name, cases, evaluators)
-        print(f"  experiment: {experiment}")
-        summary = backend.summarize(experiment)
+        experiment = await backend.run(name, cases, evaluators, experiment_name=experiment_name)
+        return name, experiment, backend.summarize(experiment)
+
+    # Run all datasets concurrently (each already fans out internally via max_concurrency).
+    for name, experiment, summary in await asyncio.gather(*(run_one(n) for n in targets)):
         means = "  ".join(f"{k}={v:.2f}" for k, v in sorted(summary["means"].items()))
-        print(f"  scores: {means}")
         cost, tokens = summary["total_cost"], summary["total_tokens"]
         cost_s = f"${cost:.4f}" if cost is not None else "n/a"
         tokens_s = f"{tokens:,}" if tokens is not None else "n/a"
+        print(f"\n[{name}] experiment: {experiment}")
+        print(f"  scores: {means}")
         print(f"  total cost: {cost_s}  |  total tokens: {tokens_s}")
 
 
@@ -74,6 +80,7 @@ def main() -> None:
 
     run_p = sub.add_parser("run", help="run evals for one or all skills")
     run_p.add_argument("--skill", help="skill to run; omit for all")
+    run_p.add_argument("--name", help="postfix for experiment names (e.g. smarter-models)")
 
     sub.add_parser("list", help="list skills and their cases")
 
@@ -85,7 +92,7 @@ def main() -> None:
 
     args = parser.parse_args()
     if args.command == "run":
-        asyncio.run(_run(args.skill))
+        asyncio.run(_run(args.skill, args.name))
     elif args.command == "list":
         _list()
     elif args.command == "add-case":

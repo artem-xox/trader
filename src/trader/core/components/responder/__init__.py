@@ -11,23 +11,18 @@ from __future__ import annotations
 from langchain_core.language_models import BaseChatModel
 from langchain_core.messages import AIMessage, SystemMessage
 
-from trader.core.models.domain import SkillResult
+from trader.core.components.responder.prompts import BASE_RESPONDER_PROMPT
+from trader.core.models.domain import GeneralAnswer, SkillResult
 from trader.core.models.schemas import AgentState, ResponderResponse
 from trader.core.skills.base import SkillRegistry
 
 
 class Responder:
-    def __init__(
-        self,
-        model: BaseChatModel,
-        registry: SkillRegistry,
-        base_prompt: str,
-        default_schema: type[SkillResult],
-    ) -> None:
+    def __init__(self, model: BaseChatModel, registry: SkillRegistry) -> None:
         self._model = model
         self._registry = registry
-        self._base_prompt = base_prompt
-        self._default_schema = default_schema
+        self._base_prompt = BASE_RESPONDER_PROMPT
+        self._default_schema = GeneralAnswer
 
     async def __call__(self, state: AgentState) -> ResponderResponse:
         skill = self._registry.get(state.get("skill"))

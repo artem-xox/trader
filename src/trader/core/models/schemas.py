@@ -60,7 +60,6 @@ class PlannerResponse(TypedDict):
 
 class GuardResponse(TypedDict):
     guard_verdict: GuardVerdict
-    # Feedback appended to the conversation when a plan is blocked, so the planner can revise.
     messages: NotRequired[Messages]
 
 
