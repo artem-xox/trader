@@ -19,7 +19,7 @@ from tests.eval.cases import add_case, load_cases, skills
 
 def _build_backend_and_evaluators():
     from tests.eval.backends.langsmith import LangSmithBackend
-    from tests.eval.evaluators import Depth, Grounding, Quality, Routing, ToolCalls
+    from tests.eval.evaluators import Depth, Grounding, Quality, Routing, ToolCalls, ToolUse
     from trader.common.config import get_settings
     from trader.core.bootstrap import build_agent, get_model
 
@@ -27,8 +27,11 @@ def _build_backend_and_evaluators():
     agent = build_agent(settings)
     # Judge at temperature 0 so scores are reproducible across runs (the agent stays at its
     # default temperature; only the evaluator must be deterministic for a stable baseline).
-    judge = get_model(settings.openai_model_weak, settings, temperature=0.0)
-    evaluators = [Grounding(), Routing(), ToolCalls(), Quality(judge), Depth(judge)]
+    # Use the dedicated eval model, falling back to the strong tier — a judge must be at
+    # least as capable as the agent it grades.
+    judge_model = settings.openai_model_eval or settings.openai_model_strong
+    judge = get_model(judge_model, settings, temperature=0.0)
+    evaluators = [Grounding(), Routing(), ToolCalls(), Quality(judge), Depth(judge), ToolUse(judge)]
     return LangSmithBackend(agent), evaluators
 
 

@@ -32,6 +32,9 @@ class Settings(BaseSettings):
     openai_model_weak: str = Field(
         default="gpt-5.4-mini", description="Model for selector / guard / verifier"
     )
+    # LLM-as-judge model for evaluation. Should be at least as capable as the agent; empty
+    # falls back to the strong tier (a judge must not be weaker than what it grades).
+    openai_model_eval: str = Field(default="", description="Model for eval LLM judges")
 
     # --- Web search ---
     tavily_api_key: str = Field(default="", description="Tavily API key")
