@@ -11,12 +11,17 @@ are built in the composition root (`trader.core.bootstrap`), not at import time.
 
 from __future__ import annotations
 
+from datetime import datetime, timezone
+
 from langchain_core.tools import BaseTool, tool
 
 from trader.core.clients import PolymarketClient, TavilyClient
+from trader.core.tools.calc import safe_eval
 from trader.core.tools.schemas import (
+    CalculatorInput,
     PolymarketMarketInput,
     PolymarketSearchInput,
+    WebFetchInput,
     WebSearchInput,
 )
 
@@ -58,4 +63,45 @@ def build_tools(polymarket: PolymarketClient, tavily: TavilyClient) -> list[Base
         """
         return await tavily.search(query, max_results=max_results)
 
-    return [polymarket_search, polymarket_market, web_search]
+    @tool
+    async def current_datetime() -> str:
+        """Get the current date and time (UTC, ISO 8601).
+
+        You have no built-in clock, so call this whenever the answer depends on "now" —
+        e.g. how long until a market resolves, whether it is still open, or any relative
+        date reasoning ("this year", "next month").
+        """
+        return datetime.now(timezone.utc).isoformat()
+
+    @tool(args_schema=CalculatorInput)
+    async def calculator(expression: str) -> str:
+        """Evaluate an arithmetic expression exactly.
+
+        Use this for any non-trivial calculation instead of doing the arithmetic yourself —
+        expected value, payout, edge, position sizing, probability normalization. Supports
+        + - * / // % **, parentheses, and sqrt/log/ln/log10/exp/abs/round/min/max plus the
+        constants pi and e. Returns the numeric result as a string.
+        """
+        try:
+            return str(safe_eval(expression))
+        except ValueError as exc:
+            return f"Calculator error: {exc}"
+
+    @tool(args_schema=WebFetchInput)
+    async def web_fetch(url: str) -> str:
+        """Read the full readable text of a specific web page.
+
+        Use this when you already have a URL and need its actual content — not a search.
+        Good for reading a market's source/resolution reference or a full news article that
+        `web_search` only surfaced a snippet of. Returns the page text (truncated).
+        """
+        return await tavily.fetch(url)
+
+    return [
+        polymarket_search,
+        polymarket_market,
+        web_search,
+        current_datetime,
+        calculator,
+        web_fetch,
+    ]

@@ -33,3 +33,17 @@ class WebSearchInput(BaseModel):
         le=10,
         description="Maximum number of web results to return.",
     )
+
+
+class CalculatorInput(BaseModel):
+    expression: str = Field(
+        description="Arithmetic expression to evaluate, e.g. '0.62 * (1/0.55 - 1) - 0.38'. "
+        "Supports + - * / // % **, parentheses, and sqrt/log/ln/log10/exp/abs/round/min/max, "
+        "and the constants pi and e.",
+    )
+
+
+class WebFetchInput(BaseModel):
+    url: str = Field(
+        description="Full URL of a web page to read in detail.",
+    )

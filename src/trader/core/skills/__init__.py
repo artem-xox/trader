@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+from collections.abc import Sequence
+from dataclasses import replace
+
 from langchain_core.tools import BaseTool
 
 from trader.core.skills.analyze import analyze_skill
@@ -15,10 +18,13 @@ def build_registry(
     polymarket_search: BaseTool,
     polymarket_market: BaseTool,
     web_search: BaseTool,
+    general: Sequence[BaseTool] = (),
 ) -> SkillRegistry:
-    return SkillRegistry(
-        [
-            find_skill(polymarket_search, web_search),
-            analyze_skill(polymarket_market, polymarket_search, web_search),
-        ]
-    )
+    skills = [
+        find_skill(polymarket_search, web_search),
+        analyze_skill(polymarket_market, polymarket_search, web_search),
+    ]
+    # General read-only helpers (calculator, current time, web fetch) are available to
+    # every skill, in addition to its own tools.
+    skills = [replace(skill, tools=skill.tools + tuple(general)) for skill in skills]
+    return SkillRegistry(skills)
