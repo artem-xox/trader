@@ -45,7 +45,7 @@ The custom ReAct-with-skills agent runs end-to-end locally and is deployed to Di
 - Memory is in-process (`InMemorySaver`); lost on restart. Postgres is a one-line swap.
 - The guard runs an LLM judge but is permissive for read-only tools — the real value
   arrives with trading skills.
-- No persisted `runs` audit table / eval dataset yet.
+- No persisted `runs` audit table yet (eval datasets now exist, see §4).
 
 ---
 
@@ -62,8 +62,10 @@ PnL tracking, scheduled/autonomous runs, multi-user accounts beyond a chat-id al
 ## 4. Roadmap
 
 - **Persistence.** Swap `InMemorySaver` → `PostgresSaver`; add a `runs` audit table.
-- **Evaluation.** Curated topic dataset + LLM-as-judge for suggestion/analysis quality;
-  CI gate on the anti-hallucination invariant (must stay 100%).
+- **Evaluation.** *Foundation built* (`tests/eval/`, CLI): per-skill YAML datasets, three
+  evaluators (grounding / routing / quality LLM-judge), LangSmith backend behind a
+  vendor-neutral `EvalBackend` protocol, `add-case` from traces. Next: more cases, a
+  `normal` dataset, and a CI gate on `grounding == 1.0`.
 - **More skills.** e.g. `/compare` (rank related markets), `/watch` (track a market over time).
 - **Trading phase (`/buy`).** The guard becomes a real approval gate with human-in-the-loop
   confirmation (LangGraph `interrupt()`) before any irreversible action; add positions/orders.
@@ -77,4 +79,5 @@ PnL tracking, scheduled/autonomous runs, multi-user accounts beyond a chat-id al
 - Streaming partial results to Telegram vs. a single final message.
 - Per-component model tiers vs. the current strong/weak split.
 - Sourcing the eval dataset: handcrafted vs. curated from real LangSmith traffic.
+  *(Decided: YAML in-repo is the source of truth; `add-case` distils cases from traces.)*
 - Rate limiting / concurrency cap on agent runs per user.

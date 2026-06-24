@@ -178,6 +178,22 @@ Three tiers (`pytest`, markers in `pyproject.toml`):
   the anti-hallucination guarantee, and tool use.
 - **`-m live`** — hits the Gamma API.
 
+## 9a. Evaluation
+
+A separate, vendor-neutral eval harness (`tests/eval/`, CLI-driven — not pytest). An
+**evaluation = one skill + its cases**; cases live as YAML in `tests/eval/datasets/<skill>/`
+(source of truth, versioned) and are synced into a backend dataset per run.
+
+- **Three evaluators** (`evaluators.py`): `grounding` (deterministic — every referenced
+  market id came from a tool, mirrors the runtime verifier), `routing` (deterministic — the
+  selector picked the expected skill), `quality` (LLM-judge against the skill's rubric).
+- **Backend abstraction** (`runner.py` `EvalBackend` protocol). `backends/langsmith.py` is the
+  only module importing the vendor SDK: cases → dataset examples, a run → an `aevaluate`
+  experiment (each turn a linked trace), our `Score`s → feedback. Swapping in Langfuse is a
+  new backend behind the same protocol.
+- **CLI** (`cli.py`): `run [--skill]`, `list`, `add-case --trace <id> --skill <s>` (distils a
+  case from a real LangSmith trace). Also `make eval [SKILL=find]`.
+
 ---
 
 ## 10. Deployment

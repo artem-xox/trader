@@ -1,0 +1,27 @@
+# `find` skill eval cases. `rubric` falls back to datasets/find/rubric.md;
+# `expected_skill` defaults to the dataset skill (find). See tests/eval/cases.py.
+# Topics are evergreen (no hard-coded slugs/dates) so the baseline stays stable.
+- id: bitcoin-bets
+  input: "/find ставки на биткойн"
+  source: handcrafted
+
+- id: trump-musk-bets
+  input: "/find актуальные ставки с трампом и маском"
+  source: handcrafted
+
+- id: world-cup-2026
+  input: "/find ставки на чемпионат мира по футболу 2026"
+  source: handcrafted
+
+- id: best-ai-model
+  input: "/find ставки на то, у кого будет лучшая AI-модель"
+  source: handcrafted
+
+- id: ethereum-price
+  input: "/find ставки на цену эфириума"
+  source: handcrafted
+
+# No slash command: also exercises the selector routing to `find`.
+- id: us-election-2028-intent
+  input: "Найди интересные ставки на президентские выборы в США 2028"
+  source: handcrafted

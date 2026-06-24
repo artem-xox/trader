@@ -1,0 +1,23 @@
+# `analyze` skill eval cases. `rubric` falls back to datasets/analyze/rubric.md;
+# `expected_skill` defaults to the dataset skill (analyze). See tests/eval/cases.py.
+# Each input describes ONE evergreen market the skill should find and deep-dive.
+- id: second-coming
+  input: "/analyze проанализируй ставку на второе пришествие иисуса христа"
+  source: handcrafted
+
+- id: bitcoin-ath
+  input: "/analyze оцени ставку на новый исторический максимум биткойна в 2026"
+  source: handcrafted
+
+- id: republicans-2028
+  input: "/analyze проанализируй ставку на победу республиканцев на выборах президента США 2028"
+  source: handcrafted
+
+- id: us-recession-2026
+  input: "/analyze проанализируй ставку на рецессию в США до конца 2026"
+  source: handcrafted
+
+# No slash command: also exercises the selector routing to `analyze`.
+- id: fed-rate-cut-intent
+  input: "Оцени, выгодна ли ставка на снижение ставки ФРС на ближайшем заседании"
+  source: handcrafted
