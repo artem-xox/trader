@@ -18,6 +18,32 @@ from trader.core.components.verifier import _market_ids_seen
 from trader.core.models.protocols import Agent
 
 
+_RESULT_SNIPPET_CHARS = 500
+
+
+def _tool_trajectory(messages: list) -> list[dict]:
+    """Reconstruct the ordered tool calls of a run: each call's name, args, and a snippet
+    of what it returned. This is what tool-use evaluators reason over."""
+    results_by_id: dict[str, str] = {}
+    for message in messages:
+        if getattr(message, "type", None) == "tool":
+            results_by_id[message.tool_call_id] = str(message.content)
+
+    trajectory: list[dict] = []
+    for message in messages:
+        if getattr(message, "type", None) != "ai":
+            continue
+        for call in getattr(message, "tool_calls", None) or []:
+            trajectory.append(
+                {
+                    "name": call["name"],
+                    "args": call.get("args", {}),
+                    "result": results_by_id.get(call["id"], "")[:_RESULT_SNIPPET_CHARS],
+                }
+            )
+    return trajectory
+
+
 async def run_agent(agent: Agent, case: Case) -> EvalSample:
     """Run one case on a fresh thread and project the final graph state to an EvalSample.
 
@@ -32,7 +58,7 @@ async def run_agent(agent: Agent, case: Case) -> EvalSample:
         },
     )
     result = state["result"]
-    num_tool_calls = sum(1 for m in state["messages"] if getattr(m, "type", None) == "tool")
+    tool_calls = _tool_trajectory(state["messages"])
     return EvalSample(
         case=case,
         skill=state.get("skill", ""),
@@ -40,7 +66,8 @@ async def run_agent(agent: Agent, case: Case) -> EvalSample:
         result=result.model_dump(),
         referenced_market_ids=result.referenced_market_ids(),
         tool_market_ids=sorted(_market_ids_seen(state)),
-        num_tool_calls=num_tool_calls,
+        num_tool_calls=len(tool_calls),
+        tool_calls=tool_calls,
     )
 
 

@@ -26,6 +26,8 @@ packages = ["src/trader"]
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
+# Repo root on the path so tests can import the `tests.eval` harness (same as `python -m`).
+pythonpath = ["."]
 # Default run is offline & free: exclude network/LLM smoke tests.
 addopts = "-m 'not live and not llm'"
 markers = [

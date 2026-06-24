@@ -29,6 +29,7 @@ def _sample_payload(sample: EvalSample) -> dict:
         "referenced_market_ids": sample.referenced_market_ids,
         "tool_market_ids": sample.tool_market_ids,
         "num_tool_calls": sample.num_tool_calls,
+        "tool_calls": sample.tool_calls,
     }
 
 
@@ -153,6 +154,7 @@ def _adapt(evaluator: Evaluator, by_id: dict[str, Case]):
             referenced_market_ids=payload.get("referenced_market_ids", []),
             tool_market_ids=payload.get("tool_market_ids", []),
             num_tool_calls=payload.get("num_tool_calls", 0),
+            tool_calls=payload.get("tool_calls", []),
         )
         score = await evaluator.evaluate(sample)
         if score is None:
