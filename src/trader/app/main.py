@@ -13,11 +13,13 @@ from dotenv import load_dotenv
 from fastapi import Depends, FastAPI, HTTPException, Security, status
 from fastapi.security import APIKeyHeader
 from langchain_core.messages import HumanMessage
+from langchain_core.tracers.context import tracing_v2_enabled
 
 from trader.app.formatting import format_result
 from trader.app.schemas import InvokeRequest, InvokeResponse
 from trader.common.config import get_settings
 from trader.core.bootstrap import build_agent
+from trader.core.models.domain import SkillResult
 from trader.core.models.protocols import Agent
 
 load_dotenv()  # so LANGSMITH_* and other vars are present for LangChain tracing
@@ -53,5 +55,20 @@ async def health() -> dict[str, str]:
 @app.post("/agent/invoke", response_model=InvokeResponse, dependencies=[Depends(_require_api_key)])
 async def invoke(req: InvokeRequest) -> InvokeResponse:
     agent: Agent = app.state.agent
-    result = await agent.invoke([HumanMessage(req.message)], thread_id=req.thread_id)
+    settings = get_settings()
+    messages = [HumanMessage(req.message)]
+
+    # In debug mode, wrap the run so we can hand back its LangSmith trace URL. The tracer
+    # is installed via context, so the agent picks it up without any changes to its config.
+    if req.debug and settings.langsmith_tracing:
+        with tracing_v2_enabled(project_name=settings.langsmith_project) as cb:
+            result: SkillResult = await agent.invoke(messages, thread_id=req.thread_id)
+            try:
+                trace_url: str | None = cb.get_run_url()
+            except Exception:  # noqa: BLE001 - trace URL is best-effort, never fail the request
+                logger.exception("could not resolve LangSmith trace URL")
+                trace_url = None
+        return InvokeResponse(response=format_result(result), result=result, trace_url=trace_url)
+
+    result = await agent.invoke(messages, thread_id=req.thread_id)
     return InvokeResponse(response=format_result(result), result=result)

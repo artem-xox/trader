@@ -34,6 +34,9 @@ dp = Dispatcher()
 # message starts from an empty history (see `/clear`).
 _chat_epoch: dict[int, int] = {}
 
+# Chats with debug mode on; while set, answers carry a LangSmith trace link (see `/debug`).
+_debug_chats: set[int] = set()
+
 
 def _allowed(chat_id: int) -> bool:
     allowed = settings.telegram_allowed_chat_ids
@@ -60,20 +63,23 @@ def allowlisted(handler: Handler) -> Handler:
     return wrapper  # type: ignore[return-value]
 
 
-async def _ask_agent(message: str, thread_id: str) -> str:
+async def _ask_agent(message: str, thread_id: str, *, debug: bool = False) -> tuple[str, str | None]:
     url = f"{settings.agent_app_url}/agent/invoke"
     headers = {"X-API-Key": settings.agent_api_key} if settings.agent_api_key else {}
+    payload = {"message": message, "thread_id": thread_id, "debug": debug}
     async with httpx.AsyncClient(timeout=httpx.Timeout(120.0)) as client:
-        resp = await client.post(url, json={"message": message, "thread_id": thread_id}, headers=headers)
+        resp = await client.post(url, json=payload, headers=headers)
         resp.raise_for_status()
-        return resp.json()["response"]
+        data = resp.json()
+        return data["response"], data.get("trace_url")
 
 
 async def _research_and_reply(message: Message, prompt: str) -> None:
     """Send the prompt to the agent and reply with its formatted answer."""
+    debug = message.chat.id in _debug_chats
     thinking = await message.answer(messages.THINKING)
     try:
-        answer = await _ask_agent(prompt, thread_id=_thread_id(message.chat.id))
+        answer, trace_url = await _ask_agent(prompt, thread_id=_thread_id(message.chat.id), debug=debug)
     except Exception:  # noqa: BLE001 - surface a friendly error, log details
         logger.exception("agent call failed")
         await thinking.delete()
@@ -84,6 +90,8 @@ async def _research_and_reply(message: Message, prompt: str) -> None:
         telegramify_markdown.markdownify(answer),
         parse_mode=ParseMode.MARKDOWN_V2,
     )
+    if debug and trace_url:
+        await message.answer(messages.trace_link(trace_url), disable_web_page_preview=True)
 
 
 @dp.message(Command("start", "help"))
@@ -97,6 +105,19 @@ async def cmd_help(message: Message) -> None:
 async def cmd_clear(message: Message) -> None:
     _chat_epoch[message.chat.id] = _chat_epoch.get(message.chat.id, 0) + 1
     await message.answer(messages.HISTORY_CLEARED)
+
+
+@dp.message(Command("debug"))
+@allowlisted
+async def cmd_debug(message: Message) -> None:
+    chat_id = message.chat.id
+    if chat_id in _debug_chats:
+        _debug_chats.discard(chat_id)
+        await message.answer(messages.DEBUG_OFF)
+        return
+    _debug_chats.add(chat_id)
+    text = messages.DEBUG_ON + ("" if settings.langsmith_tracing else messages.DEBUG_NO_TRACING)
+    await message.answer(text)
 
 
 @dp.message(Command("find"))

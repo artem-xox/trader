@@ -12,6 +12,10 @@ class InvokeRequest(BaseModel):
     thread_id: str | None = Field(
         default=None, description="Conversation thread id; scopes per-chat memory"
     )
+    debug: bool = Field(
+        default=False,
+        description="When true, capture the LangSmith trace URL for this turn (if tracing is on)",
+    )
 
 
 class InvokeResponse(BaseModel):
@@ -19,3 +23,6 @@ class InvokeResponse(BaseModel):
     # Any SkillResult subtype (GeneralAnswer / ResearchResult / MarketAnalysis).
     # SerializeAsAny keeps the concrete subclass fields instead of narrowing to the base.
     result: SerializeAsAny[SkillResult] = Field(description="Structured result")
+    trace_url: str | None = Field(
+        default=None, description="LangSmith trace URL for this turn (debug mode only)"
+    )
