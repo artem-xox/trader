@@ -21,7 +21,15 @@
   input: "/find ставки на цену эфириума"
   source: handcrafted
 
-# No slash command: also exercises the selector routing to `find`.
+# No slash command: exercise the selector routing to `find` (discovery of several bets).
 - id: us-election-2028-intent
   input: "Найди интересные ставки на президентские выборы в США 2028"
+  source: handcrafted
+
+- id: bitcoin-intent
+  input: "Какие сейчас есть интересные ставки на биткойн?"
+  source: handcrafted
+
+- id: ai-models-intent
+  input: "Покажи, что есть на Polymarket про AI-модели"
   source: handcrafted

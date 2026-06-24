@@ -17,7 +17,15 @@
   input: "/analyze проанализируй ставку на рецессию в США до конца 2026"
   source: handcrafted
 
-# No slash command: also exercises the selector routing to `analyze`.
+# No slash command: exercise the selector routing to `analyze` (one specific bet).
 - id: fed-rate-cut-intent
   input: "Оцени, выгодна ли ставка на снижение ставки ФРС на ближайшем заседании"
+  source: handcrafted
+
+- id: bitcoin-ath-intent
+  input: "Стоит ли брать ставку на новый максимум биткойна в этом году? разбери её"
+  source: handcrafted
+
+- id: republicans-2028-intent
+  input: "Насколько разумна ставка на победу республиканцев в 2028? оцени edge"
   source: handcrafted

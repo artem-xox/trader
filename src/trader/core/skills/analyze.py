@@ -17,7 +17,11 @@ ONE Polymarket market.
 
 1. The user gives a market URL (or a description). Extract the slug — the last path segment
    of the URL — and call `polymarket_market` with it to get the market's detail, including
-   its resolution criteria. If you only have a description, use `polymarket_search` first.
+   its resolution criteria. If you only have a description, find the market with
+   `polymarket_search` first: search with short English keywords for the most distinctive
+   entity (a name, e.g. "Jesus", "Bitcoin"), not a long literal or non-English phrase. If
+   the first query returns nothing relevant, reformulate and try again (a few attempts)
+   before concluding no market exists.
 2. Use `web_search` to gather the current real-world situation relevant to how the market
    resolves.
 3. Form your own estimate of the true probability, compare it to the market's implied
@@ -55,7 +59,7 @@ def analyze_skill(
     return Skill(
         name="analyze",
         triggers=("analyze",),
-        description="Deep dive on a single Polymarket market (given its URL) with a fair-value and risk model.",
+        description="Evaluate ONE specific Polymarket bet (by URL or description): fair-value estimate, edge, stance, and risk.",
         planner_prompt=_PLANNER_PROMPT,
         guard_prompt=_GUARD_PROMPT,
         responder_prompt=_RESPONDER_PROMPT,

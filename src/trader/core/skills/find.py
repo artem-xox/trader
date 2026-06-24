@@ -47,7 +47,7 @@ def find_skill(polymarket_search: BaseTool, web_search: BaseTool) -> Skill:
     return Skill(
         name="find",
         triggers=("find",),
-        description="Find, analyze and rank interesting Polymarket bets on a topic, with risk assessment.",
+        description="Discover and rank a shortlist of interesting Polymarket bets on a topic or theme, each with a risk assessment.",
         planner_prompt=_PLANNER_PROMPT,
         guard_prompt=_GUARD_PROMPT,
         responder_prompt=_RESPONDER_PROMPT,

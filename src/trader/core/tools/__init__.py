@@ -26,6 +26,10 @@ def build_tools(polymarket: PolymarketClient, tavily: TavilyClient) -> list[Base
     async def polymarket_search(query: str, limit: int = 8) -> str:
         """Search active Polymarket prediction markets matching a topic or keyword.
 
+        Markets are indexed in English, so search with short English keywords for the most
+        distinctive entity (a name, e.g. "Jesus", "Bitcoin"), not a long literal phrase or a
+        non-English one. If a query returns nothing relevant, reformulate and try again.
+
         Returns a JSON list of markets with their question, current implied probabilities
         per outcome, traded volume, liquidity, end date, and a link. Use this to find real
         markets before suggesting any bet — never invent markets.
