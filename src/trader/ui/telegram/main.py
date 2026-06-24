@@ -8,6 +8,9 @@ from __future__ import annotations
 
 import asyncio
 import logging
+from collections.abc import Awaitable, Callable
+from functools import wraps
+from typing import Any, TypeVar
 
 import httpx
 import telegramify_markdown
@@ -18,6 +21,7 @@ from aiogram.types import Message
 from dotenv import load_dotenv
 
 from trader.common.config import get_settings
+from trader.ui.telegram.content import messages
 
 load_dotenv()
 logging.basicConfig(level=logging.INFO)
@@ -26,10 +30,34 @@ logger = logging.getLogger(__name__)
 settings = get_settings()
 dp = Dispatcher()
 
+# Per-chat conversation epoch. Bumping it changes the agent thread id, so the next
+# message starts from an empty history (see `/clear`).
+_chat_epoch: dict[int, int] = {}
+
 
 def _allowed(chat_id: int) -> bool:
     allowed = settings.telegram_allowed_chat_ids
     return not allowed or chat_id in allowed
+
+
+def _thread_id(chat_id: int) -> str:
+    return f"{chat_id}:{_chat_epoch.get(chat_id, 0)}"
+
+
+Handler = TypeVar("Handler", bound=Callable[..., Awaitable[Any]])
+
+
+def allowlisted(handler: Handler) -> Handler:
+    """Reject messages from chats not on the allowlist before running `handler`."""
+
+    @wraps(handler)
+    async def wrapper(message: Message, *args: Any, **kwargs: Any) -> Any:
+        if not _allowed(message.chat.id):
+            await message.answer(messages.NOT_ALLOWED)
+            return None
+        return await handler(message, *args, **kwargs)
+
+    return wrapper  # type: ignore[return-value]
 
 
 async def _ask_agent(message: str, thread_id: str) -> str:
@@ -43,17 +71,15 @@ async def _ask_agent(message: str, thread_id: str) -> str:
 
 async def _research_and_reply(message: Message, prompt: str) -> None:
     """Send the prompt to the agent and reply with its formatted answer."""
-    if not _allowed(message.chat.id):
-        await message.answer("Sorry, you are not on the allowlist.")
-        return
-
-    await message.answer("🔎 Researching…")
+    thinking = await message.answer(messages.THINKING)
     try:
-        answer = await _ask_agent(prompt, thread_id=str(message.chat.id))
+        answer = await _ask_agent(prompt, thread_id=_thread_id(message.chat.id))
     except Exception:  # noqa: BLE001 - surface a friendly error, log details
         logger.exception("agent call failed")
-        await message.answer("⚠️ Something went wrong while researching. Try again.")
+        await thinking.delete()
+        await message.answer(messages.RESEARCH_FAILED)
         return
+    await thinking.delete()
     await message.answer(
         telegramify_markdown.markdownify(answer),
         parse_mode=ParseMode.MARKDOWN_V2,
@@ -61,35 +87,40 @@ async def _research_and_reply(message: Message, prompt: str) -> None:
 
 
 @dp.message(Command("start", "help"))
+@allowlisted
 async def cmd_help(message: Message) -> None:
-    await message.answer(
-        "👋 I'm AI Trader.\n\n"
-        "Just send me a topic and I'll research interesting Polymarket bets.\n"
-        "• /find <topic> — find interesting bets on a topic.\n"
-        "• /analyze <market url> — deep dive on one market with a risk model.\n"
-        "Example: /find bitcoin price 2026"
-    )
+    await message.answer(messages.HELP)
+
+
+@dp.message(Command("clear"))
+@allowlisted
+async def cmd_clear(message: Message) -> None:
+    _chat_epoch[message.chat.id] = _chat_epoch.get(message.chat.id, 0) + 1
+    await message.answer(messages.HISTORY_CLEARED)
 
 
 @dp.message(Command("find"))
+@allowlisted
 async def cmd_find(message: Message, command: CommandObject) -> None:
     if not (command.args or "").strip():
-        await message.answer("Usage: /find <topic>")
+        await message.answer(messages.USAGE_FIND)
         return
     # Forward the full text (incl. "/find") so the agent's skills node activates `find`.
     await _research_and_reply(message, message.text)
 
 
 @dp.message(Command("analyze"))
+@allowlisted
 async def cmd_analyze(message: Message, command: CommandObject) -> None:
     if not (command.args or "").strip():
-        await message.answer("Usage: /analyze <market url>")
+        await message.answer(messages.USAGE_ANALYZE)
         return
     # Forward the full text (incl. "/analyze") so the agent's skills node activates `analyze`.
     await _research_and_reply(message, message.text)
 
 
 @dp.message(F.text & ~F.text.startswith("/"))
+@allowlisted
 async def any_message(message: Message) -> None:
     await _research_and_reply(message, message.text)
 
