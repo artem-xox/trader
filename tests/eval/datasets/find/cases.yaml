@@ -21,6 +21,16 @@
   input: "/find ставки на цену эфириума"
   source: handcrafted
 
+# Single-company stock topics: Gamma ranks resolved markets first for these, so they
+# regress to a false "no markets" without events_status=active. Keep as guards.
+- id: nvidia-bets
+  input: "/find ставки на Nvidia"
+  source: handcrafted
+
+- id: tesla-bets
+  input: "/find ставки на Tesla"
+  source: handcrafted
+
 # No slash command: exercise the selector routing to `find` (discovery of several bets).
 - id: us-election-2028-intent
   input: "Найди интересные ставки на президентские выборы в США 2028"

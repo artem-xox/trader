@@ -116,8 +116,7 @@ async def cmd_debug(message: Message) -> None:
         await message.answer(messages.DEBUG_OFF)
         return
     _debug_chats.add(chat_id)
-    text = messages.DEBUG_ON + ("" if settings.langsmith_tracing else messages.DEBUG_NO_TRACING)
-    await message.answer(text)
+    await message.answer(messages.DEBUG_ON)
 
 
 @dp.message(Command("find"))

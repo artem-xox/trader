@@ -28,6 +28,7 @@ def _sample_payload(sample: EvalSample) -> dict:
         "result": sample.result,
         "referenced_market_ids": sample.referenced_market_ids,
         "tool_market_ids": sample.tool_market_ids,
+        "num_tool_calls": sample.num_tool_calls,
     }
 
 
@@ -73,6 +74,33 @@ class LangSmithBackend:
         )
         return results.experiment_name
 
+    def summarize(self, experiment_name: str) -> dict:
+        """Aggregate an experiment: mean of each score + native cost/token totals.
+
+        Cost and tokens are computed by LangSmith on each root run, so we read them rather
+        than recomputing. Cost aggregation can lag a beat after the run; missing values are
+        simply skipped.
+        """
+        runs = list(self._client.list_runs(project_name=experiment_name, is_root=True))
+        scores: dict[str, list[float]] = {}
+        costs: list[float] = []
+        tokens: list[int] = []
+        for run in runs:
+            for fb in self._client.list_feedback(run_ids=[run.id]):
+                if fb.score is not None:
+                    scores.setdefault(fb.key, []).append(fb.score)
+            if run.total_cost is not None:
+                costs.append(float(run.total_cost))
+            if run.total_tokens is not None:
+                tokens.append(int(run.total_tokens))
+        means = {key: sum(vals) / len(vals) for key, vals in scores.items()}
+        return {
+            "cases": len(runs),
+            "means": means,
+            "total_cost": sum(costs) if costs else None,
+            "total_tokens": sum(tokens) if tokens else None,
+        }
+
     def read_case_from_trace(
         self, trace_id: str, skill: str, *, case_id: str | None = None, rubric: str | None = None
     ) -> Case:
@@ -101,6 +129,7 @@ def _adapt(evaluator: Evaluator, by_id: dict[str, Case]):
             result=payload.get("result", {}),
             referenced_market_ids=payload.get("referenced_market_ids", []),
             tool_market_ids=payload.get("tool_market_ids", []),
+            num_tool_calls=payload.get("num_tool_calls", 0),
         )
         score = await evaluator.evaluate(sample)
         if score is None:

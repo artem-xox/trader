@@ -19,13 +19,15 @@ from trader.core.agents.react import ReActAgent
 from trader.core.clients import PolymarketClient, TavilyClient
 from trader.core.components.executor import Executor
 from trader.core.components.guard import Guard
+from trader.core.components.guard.prompts import BASE_GUARD_PROMPT
 from trader.core.components.planner import Planner
+from trader.core.components.planner.prompts import BASE_PLANNER_PROMPT
 from trader.core.components.responder import Responder
+from trader.core.components.responder.prompts import BASE_RESPONDER_PROMPT
 from trader.core.components.selector import Selector
 from trader.core.components.verifier import Verifier
 from trader.core.models.domain import GeneralAnswer
 from trader.core.models.protocols import Agent
-from trader.core.prompts import BASE_GUARD_PROMPT, BASE_PLANNER_PROMPT, BASE_RESPONDER_PROMPT
 from trader.core.skills import build_registry
 from trader.core.tools import build_tools
 
@@ -39,6 +41,7 @@ def build_agent(
     checkpointer: BaseCheckpointSaver | None = None,
 ) -> Agent:
     settings = settings or get_settings()
+    
     strong = get_model(settings.openai_model_strong, settings)  # planner
     weak = get_model(settings.openai_model_weak, settings)  # everything else
 
@@ -52,6 +55,7 @@ def build_agent(
 
     # In-memory for now; swap for langgraph-checkpoint-postgres' PostgresSaver in prod.
     checkpointer = checkpointer or InMemorySaver()
+    
     return ReActAgent(
         selector=Selector(weak, registry),
         planner=Planner(strong, registry, BASE_PLANNER_PROMPT, base_tools),

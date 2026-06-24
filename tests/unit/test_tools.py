@@ -65,7 +65,17 @@ def test_parse_market_detail_keeps_closed_and_description():
 @pytest.mark.live
 @pytest.mark.asyncio
 async def test_polymarket_search_live():
-    polymarket_search, _ = build_tools(PolymarketClient(), TavilyClient(api_key="dummy"))
+    polymarket_search, *_ = build_tools(PolymarketClient(), TavilyClient(api_key="dummy"))
     out = await polymarket_search.ainvoke({"query": "bitcoin", "limit": 2})
     assert isinstance(out, str)
     assert "market_id" in out or "No active" in out
+
+
+@pytest.mark.live
+@pytest.mark.asyncio
+async def test_polymarket_search_surfaces_active_over_closed_live():
+    """Regression: for queries whose top-ranked Gamma results are resolved markets (e.g.
+    "nvidia"), search must still surface the active ones (via `events_status=active`) rather
+    than falsely reporting no markets."""
+    out = await PolymarketClient().search("nvidia", limit=5)
+    assert "market_id" in out, out

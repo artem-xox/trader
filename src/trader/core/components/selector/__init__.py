@@ -15,8 +15,8 @@ from langchain_core.language_models import BaseChatModel
 from langchain_core.messages import HumanMessage, SystemMessage
 from pydantic import BaseModel, Field
 
+from trader.core.components.selector.prompts import SELECTOR_PROMPT
 from trader.core.models.schemas import AgentState, Messages, SelectorResponse
-from trader.core.prompts import SELECTOR_PROMPT
 from trader.core.skills.base import SkillRegistry
 
 

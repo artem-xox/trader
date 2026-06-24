@@ -98,7 +98,15 @@ class PolymarketClient:
         self._timeout = timeout
 
     async def search(self, query: str, limit: int = 8) -> str:
-        params = {"q": query, "limit_per_type": max(1, min(limit, 20))}
+        # `events_status=active` is required: without it Gamma ranks resolved/old markets
+        # first and can bury (or omit) the active ones entirely — e.g. "nvidia" otherwise
+        # returns only closed markets and looks like "no markets". The `active`/`closed`
+        # params have no effect on this endpoint; `events_status` is the one that works.
+        params = {
+            "q": query,
+            "limit_per_type": max(1, min(limit, 20)),
+            "events_status": "active",
+        }
         try:
             async with httpx.AsyncClient(timeout=self._timeout) as client:
                 resp = await client.get(

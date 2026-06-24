@@ -23,9 +23,12 @@ class Settings(BaseSettings):
 
     # --- LLM ---
     openai_api_key: str = Field(default="", description="OpenAI API key")
+    
     # Two tiers: a stronger model for planning (the reasoning step) and a lighter one for
     # the supporting components (skill selection, guard, response synthesis).
-    openai_model_strong: str = Field(default="gpt-4.1", description="Model for the planner")
+    openai_model_strong: str = Field(
+        default="gpt-4.1", description="Model for the planner",
+    )
     openai_model_weak: str = Field(
         default="gpt-4.1-mini", description="Model for selector / guard / responder"
     )

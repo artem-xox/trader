@@ -44,6 +44,7 @@ class EvalSample:
     result: dict
     referenced_market_ids: list[str]
     tool_market_ids: list[str]
+    num_tool_calls: int
 
 
 class Evaluator(Protocol):
@@ -83,6 +84,16 @@ class Routing:
         return Score(self.key, 1.0 if ok else 0.0, f"expected {expected!r}, got {sample.skill!r}")
 
 
+class ToolCalls:
+    """How many tool calls the turn made. A metric, not pass/fail — surfaces under-research
+    (0–1 calls on a question that needs evidence) or runaway loops (many calls)."""
+
+    key = "tool_calls"
+
+    async def evaluate(self, sample: EvalSample) -> Score | None:
+        return Score(self.key, float(sample.num_tool_calls), f"{sample.num_tool_calls} tool call(s)")
+
+
 _QUALITY_PROMPT = """You are a strict evaluator of a prediction-market research assistant.
 
 The user asked:
@@ -116,6 +127,43 @@ class Quality:
             input=sample.case.input,
             answer=json.dumps(sample.result, ensure_ascii=False, indent=2),
             rubric=sample.case.rubric or "General helpfulness, correctness, and clarity.",
+        )
+        judgement: _Judgement = await self._model.ainvoke(prompt)
+        value = max(0.0, min(1.0, judgement.score))
+        return Score(self.key, value, judgement.comment)
+
+
+_DEPTH_PROMPT = """You judge the ANALYTICAL DEPTH and EXPERTISE of a prediction-market
+assistant's answer — not whether it is correct, but how rigorous and expert it is.
+
+The user asked:
+{input}
+
+The assistant's structured answer (JSON):
+{answer}
+
+Score 0.0-1.0 on the bar of a top quant analyst who is also a sharp probabilist:
+- 1.0: specific, quantitative reasoning; weighs concrete evidence and base rates; explicit
+  probabilities with justification; surfaces non-obvious factors and second-order effects.
+- 0.5: plausible but partly generic; some numbers, shallow justification.
+- 0.0: vague and hand-wavy; no real numbers or evidence; could have been written without
+  ever looking at the market.
+
+Reward genuine depth, penalize fluff. Return a score and a one-sentence justification."""
+
+
+class Depth:
+    """LLM-as-judge focused only on analytical depth / expertise, independent of `quality`."""
+
+    key = "depth"
+
+    def __init__(self, model: BaseChatModel) -> None:
+        self._model = model.with_structured_output(_Judgement)
+
+    async def evaluate(self, sample: EvalSample) -> Score | None:
+        prompt = _DEPTH_PROMPT.format(
+            input=sample.case.input,
+            answer=json.dumps(sample.result, ensure_ascii=False, indent=2),
         )
         judgement: _Judgement = await self._model.ainvoke(prompt)
         value = max(0.0, min(1.0, judgement.score))

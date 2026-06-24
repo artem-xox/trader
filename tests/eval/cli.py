@@ -19,14 +19,15 @@ from tests.eval.cases import add_case, load_cases, skills
 
 def _build_backend_and_evaluators():
     from tests.eval.backends.langsmith import LangSmithBackend
-    from tests.eval.evaluators import Grounding, Quality, Routing
+    from tests.eval.evaluators import Depth, Grounding, Quality, Routing, ToolCalls
     from trader.common.config import get_settings
     from trader.core.bootstrap import build_agent, get_model
 
     settings = get_settings()
     agent = build_agent(settings)
     judge = get_model(settings.openai_model_weak, settings)
-    return LangSmithBackend(agent), [Grounding(), Routing(), Quality(judge)]
+    evaluators = [Grounding(), Routing(), ToolCalls(), Quality(judge), Depth(judge)]
+    return LangSmithBackend(agent), evaluators
 
 
 async def _run(skill: str | None) -> None:
@@ -37,6 +38,13 @@ async def _run(skill: str | None) -> None:
         print(f"running '{name}': {len(cases)} case(s)...")
         experiment = await backend.run(name, cases, evaluators)
         print(f"  experiment: {experiment}")
+        summary = backend.summarize(experiment)
+        means = "  ".join(f"{k}={v:.2f}" for k, v in sorted(summary["means"].items()))
+        print(f"  scores: {means}")
+        cost, tokens = summary["total_cost"], summary["total_tokens"]
+        cost_s = f"${cost:.4f}" if cost is not None else "n/a"
+        tokens_s = f"{tokens:,}" if tokens is not None else "n/a"
+        print(f"  total cost: {cost_s}  |  total tokens: {tokens_s}")
 
 
 def _list() -> None:

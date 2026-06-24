@@ -184,9 +184,13 @@ A separate, vendor-neutral eval harness (`tests/eval/`, CLI-driven — not pytes
 **evaluation = one skill + its cases**; cases live as YAML in `tests/eval/datasets/<skill>/`
 (source of truth, versioned) and are synced into a backend dataset per run.
 
-- **Three evaluators** (`evaluators.py`): `grounding` (deterministic — every referenced
-  market id came from a tool, mirrors the runtime verifier), `routing` (deterministic — the
-  selector picked the expected skill), `quality` (LLM-judge against the skill's rubric).
+- **Evaluators** (`evaluators.py`): `grounding` (deterministic — every referenced market id
+  came from a tool, mirrors the runtime verifier), `routing` (deterministic — the selector
+  picked the expected skill), `tool_calls` (deterministic metric — number of tool calls, to
+  spot under-research or runaway loops), `quality` (LLM-judge against the skill's rubric),
+  and `depth` (LLM-judge for analytical depth/expertise, independent of quality). Cost and
+  token totals are read from LangSmith's native per-run aggregation (not recomputed) and
+  printed by the CLI after each run.
 - **Backend abstraction** (`runner.py` `EvalBackend` protocol). `backends/langsmith.py` is the
   only module importing the vendor SDK: cases → dataset examples, a run → an `aevaluate`
   experiment (each turn a linked trace), our `Score`s → feedback. Swapping in Langfuse is a

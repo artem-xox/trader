@@ -32,6 +32,7 @@ async def run_agent(agent: Agent, case: Case) -> EvalSample:
         },
     )
     result = state["result"]
+    num_tool_calls = sum(1 for m in state["messages"] if getattr(m, "type", None) == "tool")
     return EvalSample(
         case=case,
         skill=state.get("skill", ""),
@@ -39,6 +40,7 @@ async def run_agent(agent: Agent, case: Case) -> EvalSample:
         result=result.model_dump(),
         referenced_market_ids=result.referenced_market_ids(),
         tool_market_ids=sorted(_market_ids_seen(state)),
+        num_tool_calls=num_tool_calls,
     )
 
 
