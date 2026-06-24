@@ -36,3 +36,17 @@ class TavilyClient:
         return json.dumps(
             {"answer": resp.get("answer"), "results": results}, ensure_ascii=False
         )
+
+    async def fetch(self, url: str, max_chars: int = 8000) -> str:
+        """Extract the readable text of a single web page. Truncated to keep the result
+        within a sane token budget."""
+        try:
+            resp = await self._client.extract(url, format="text")
+        except Exception as exc:  # noqa: BLE001 - return a tool error the model can handle
+            return f"Web fetch failed: {exc}"
+
+        results = resp.get("results", [])
+        if not results:
+            return f"Could not fetch readable content for url: {url!r}."
+        content = results[0].get("raw_content") or ""
+        return content[:max_chars] if content else f"No readable content at url: {url!r}."

@@ -23,9 +23,10 @@ Given the user's topic, find genuinely interesting bets:
 Never invent markets — only reason about markets returned by the tools.
 """
 
-_GUARD_PROMPT = """The active skill is read-only Polymarket research. The only expected
-tools are market search and web search — both read-only. Allow them freely; this skill
-performs no trading or money-moving actions.
+_GUARD_PROMPT = """The active skill is read-only Polymarket research. The expected tools
+(market search, web search, and general read-only helpers — a calculator, the current
+date/time, and fetching a page) are all read-only. Allow them freely; this skill performs
+no trading or money-moving actions.
 """
 
 _RESPONDER_PROMPT = """You are finalizing a Polymarket research turn.

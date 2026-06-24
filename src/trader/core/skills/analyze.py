@@ -33,7 +33,8 @@ event with several markets, focus on the single most relevant one.
 """
 
 _GUARD_PROMPT = """The active skill is read-only analysis of one Polymarket market. The
-expected tools (market lookup, market search, web search) are all read-only — allow them
+expected tools (market lookup, market search, web search, and general read-only helpers —
+a calculator, the current date/time, and fetching a page) are all read-only — allow them
 freely. This skill performs no trading or money-moving actions.
 """
 

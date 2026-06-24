@@ -41,13 +41,15 @@ def build_agent(
     strong = get_model(settings.openai_model_strong, settings)  # planner
     weak = get_model(settings.openai_model_weak, settings)  # everything else
 
-    polymarket_search, polymarket_market, web_search = build_tools(
+    polymarket_search, polymarket_market, web_search, *general = build_tools(
         PolymarketClient(),
         TavilyClient(api_key=settings.tavily_api_key),
     )
-    registry = build_registry(polymarket_search, polymarket_market, web_search)
-    all_tools = [polymarket_search, polymarket_market, web_search]
-    base_tools = [web_search]  # normal mode: general-purpose research only
+    # general = [current_datetime, calculator, web_fetch] — read-only helpers available
+    # everywhere (every skill and normal mode).
+    registry = build_registry(polymarket_search, polymarket_market, web_search, general)
+    all_tools = [polymarket_search, polymarket_market, web_search, *general]
+    base_tools = [web_search, *general]  # normal mode: web research + general helpers
 
     # In-memory for now; swap for langgraph-checkpoint-postgres' PostgresSaver in prod.
     checkpointer = checkpointer or InMemorySaver()
