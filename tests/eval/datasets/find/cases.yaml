@@ -1,10 +1,69 @@
 # `find` skill eval cases. `rubric` falls back to datasets/find/rubric.md;
 # `expected_skill` defaults to the dataset skill (find). See tests/eval/cases.py.
 # Topics are evergreen (no hard-coded slugs/dates) so the baseline stays stable.
-- id: bitcoin-bets
-  input: "/find ставки на биткойн"
+# 14 English / 6 Russian. The no-slash "intent" cases also exercise selector routing.
+
+# --- English (slash command) ---
+- id: fed-rate-bets
+  input: "/find bets on Federal Reserve interest rate decisions"
   source: handcrafted
 
+- id: ai-llm-bets
+  input: "/find bets on AI and large language models"
+  source: handcrafted
+
+- id: crypto-etf-bets
+  input: "/find bets on crypto ETF approvals"
+  source: handcrafted
+
+- id: us-election-2028-bets
+  input: "/find bets on the 2028 US presidential election"
+  source: handcrafted
+
+- id: climate-record-bets
+  input: "/find bets on global temperature and climate records"
+  source: handcrafted
+
+- id: spacex-space-bets
+  input: "/find bets on SpaceX and space exploration"
+  source: handcrafted
+
+- id: ethereum-price-bets
+  input: "/find bets on the price of Ethereum"
+  source: handcrafted
+
+- id: best-ai-model-bets
+  input: "/find bets on which company will have the best AI model"
+  source: handcrafted
+
+- id: us-recession-bets
+  input: "/find bets on a US recession"
+  source: handcrafted
+
+- id: sports-championship-bets
+  input: "/find bets on upcoming major sports championships"
+  source: handcrafted
+
+# Single-company stock topic: Gamma ranks resolved markets first here, so it can regress
+# to a false "no markets" without events_status=active. Keep as an English guard.
+- id: apple-bets
+  input: "/find bets on Apple"
+  source: handcrafted
+
+# --- English (no slash: routing to `find`) ---
+- id: ai-bets-intent
+  input: "What are the most interesting bets on AI right now?"
+  source: handcrafted
+
+- id: crypto-bets-intent
+  input: "Show me what's available on Polymarket about cryptocurrency prices."
+  source: handcrafted
+
+- id: election-bets-intent
+  input: "Find some interesting bets on the next US presidential election."
+  source: handcrafted
+
+# --- Russian ---
 - id: trump-musk-bets
   input: "/find актуальные ставки с трампом и маском"
   source: handcrafted
@@ -13,16 +72,8 @@
   input: "/find ставки на чемпионат мира по футболу 2026"
   source: handcrafted
 
-- id: best-ai-model
-  input: "/find ставки на то, у кого будет лучшая AI-модель"
-  source: handcrafted
-
-- id: ethereum-price
-  input: "/find ставки на цену эфириума"
-  source: handcrafted
-
-# Single-company stock topics: Gamma ranks resolved markets first for these, so they
-# regress to a false "no markets" without events_status=active. Keep as guards.
+# Single-company stock topics: Gamma ranks resolved markets first, so they regress to a
+# false "no markets" without events_status=active. Keep as guards.
 - id: nvidia-bets
   input: "/find ставки на Nvidia"
   source: handcrafted
@@ -38,8 +89,4 @@
 
 - id: bitcoin-intent
   input: "Какие сейчас есть интересные ставки на биткойн?"
-  source: handcrafted
-
-- id: ai-models-intent
-  input: "Покажи, что есть на Polymarket про AI-модели"
   source: handcrafted

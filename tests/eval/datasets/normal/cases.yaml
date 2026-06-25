@@ -1,8 +1,8 @@
 # `normal` mode eval cases: off-domain tasks (no Polymarket tools) that genuinely require a
-# research loop — looking up current facts, often multi-hop — and synthesizing an answer.
-# They must route to normal mode (no skill), so expected_skill defaults to "normal" (the
-# routing evaluator maps an empty skill -> normal). `rubric` falls back to the skill rubric.
-# Mostly English (7), a few Russian (3). See tests/eval/cases.py.
+# research loop — looking up current facts, often multi-hop, sometimes arithmetic or date
+# math — and synthesizing an answer. They must route to normal mode (no skill), so
+# expected_skill defaults to "normal" (the routing evaluator maps an empty skill -> normal).
+# `rubric` falls back to the skill rubric. 14 English / 6 Russian. See tests/eval/cases.py.
 
 # --- English ---
 - id: openai-ceo-prior-company
@@ -33,6 +33,41 @@
   input: "When was the most recent SpaceX Starship test flight, and was it considered a success?"
   source: handcrafted
 
+# Multi-hop: two separate lookups + an arithmetic comparison (rewards the calculator).
+- id: fed-vs-ecb-rate
+  input: "What is the current US federal funds target rate, and how does it compare to the ECB's main refinancing rate? Which is higher, and by how many basis points?"
+  source: handcrafted
+
+# Lookup of two figures + a ratio (rewards the calculator).
+- id: eth-btc-mktcap-ratio
+  input: "Roughly what fraction of Bitcoin's market capitalization is Ethereum's right now? Give both figures and the approximate ratio."
+  source: handcrafted
+
+# Current fact, two parts.
+- id: nobel-physics-latest
+  input: "Who won the most recent Nobel Prize in Physics, and what was it awarded for?"
+  source: handcrafted
+
+# Current fact + tenure (rewards current_datetime + date math).
+- id: uk-pm-tenure
+  input: "Who is the current Prime Minister of the United Kingdom, and roughly how long have they been in office?"
+  source: handcrafted
+
+# Lookup + subtraction against a fixed past year (rewards the calculator).
+- id: world-population-growth
+  input: "What is the current estimated world population, and approximately how many people have been added since the year 2000?"
+  source: handcrafted
+
+# Date arithmetic from today (rewards current_datetime + calculator).
+- id: days-until-next-olympics
+  input: "When and where are the next Summer Olympics, and approximately how many days from today is the opening ceremony?"
+  source: handcrafted
+
+# Current fact + a notable comparison.
+- id: largest-economy-gdp
+  input: "Which country has the largest nominal GDP right now, and roughly how much larger is it than the second-largest economy?"
+  source: handcrafted
+
 # --- Russian ---
 - id: moscow-mayor
   input: "Кто сейчас мэр Москвы и с какого года он занимает этот пост?"
@@ -44,4 +79,19 @@
 
 - id: bitcoin-price-now
   input: "Сколько сейчас стоит один биткойн в долларах? Найди актуальную цену."
+  source: handcrafted
+
+# Current fact + year-over-year change (rewards the calculator).
+- id: usd-rub-rate-change
+  input: "Какой сейчас курс доллара к рублю и насколько он изменился за последний год в процентах?"
+  source: handcrafted
+
+# Current fact, two parts.
+- id: richest-person-net-worth
+  input: "Кто сейчас самый богатый человек в мире и какое у него примерно состояние?"
+  source: handcrafted
+
+# Upcoming event + its goals.
+- id: next-artemis-mission
+  input: "Когда запланирована следующая миссия программы Artemis от NASA и какие у неё основные цели?"
   source: handcrafted

@@ -1,6 +1,68 @@
 # `analyze` skill eval cases. `rubric` falls back to datasets/analyze/rubric.md;
 # `expected_skill` defaults to the dataset skill (analyze). See tests/eval/cases.py.
-# Each input describes ONE evergreen market the skill should find and deep-dive.
+# Each input describes ONE evergreen market the skill should find and deep-dive (no
+# hard-coded slugs/dates). 14 English / 6 Russian. The no-slash "intent" cases also
+# exercise the selector routing to `analyze`.
+
+# --- English (slash command) ---
+- id: btc-200k-2026
+  input: "/analyze evaluate the bet on Bitcoin reaching $200,000 in 2026"
+  source: handcrafted
+
+- id: fed-rate-cut-next-meeting
+  input: "/analyze analyze the market on the Fed cutting interest rates at its next meeting"
+  source: handcrafted
+
+- id: us-govt-shutdown-2026
+  input: "/analyze evaluate the bet on a US federal government shutdown before the end of 2026"
+  source: handcrafted
+
+- id: us-inflation-below-2-2026
+  input: "/analyze analyze the market on US inflation falling below 2% in 2026"
+  source: handcrafted
+
+- id: agi-by-2027
+  input: "/analyze evaluate the bet on AGI being achieved by the end of 2027"
+  source: handcrafted
+
+- id: spacex-mars-2030
+  input: "/analyze analyze the market on SpaceX landing humans on Mars before 2030"
+  source: handcrafted
+
+- id: ukraine-ceasefire-2026
+  input: "/analyze evaluate the bet on a Russia-Ukraine ceasefire in 2026"
+  source: handcrafted
+
+- id: eth-flippening
+  input: "/analyze analyze the market on Ethereum flipping Bitcoin in market capitalization"
+  source: handcrafted
+
+- id: openai-ipo-2027
+  input: "/analyze evaluate the bet on OpenAI going public before 2027"
+  source: handcrafted
+
+- id: tiktok-ban-us-2026
+  input: "/analyze analyze the market on TikTok being banned in the US in 2026"
+  source: handcrafted
+
+- id: hottest-year-2026
+  input: "/analyze evaluate the bet on 2026 being the hottest year on record"
+  source: handcrafted
+
+# --- English (no slash: routing to `analyze`) ---
+- id: btc-200k-intent
+  input: "Is the bet on Bitcoin reaching $200k in 2026 worth taking? Break down the edge quantitatively."
+  source: handcrafted
+
+- id: democrat-2028-intent
+  input: "How reasonable is a bet on a Democrat winning the 2028 US presidential election? Assess the edge."
+  source: handcrafted
+
+- id: nuclear-conflict-intent
+  input: "Evaluate whether betting on a nuclear weapon being used in conflict before 2027 has any edge."
+  source: handcrafted
+
+# --- Russian ---
 - id: second-coming
   input: "/analyze проанализируй ставку на второе пришествие иисуса христа"
   source: handcrafted
@@ -20,10 +82,6 @@
 # No slash command: exercise the selector routing to `analyze` (one specific bet).
 - id: fed-rate-cut-intent
   input: "Оцени, выгодна ли ставка на снижение ставки ФРС на ближайшем заседании"
-  source: handcrafted
-
-- id: bitcoin-ath-intent
-  input: "Стоит ли брать ставку на новый максимум биткойна в этом году? разбери её"
   source: handcrafted
 
 - id: republicans-2028-intent
