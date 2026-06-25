@@ -13,6 +13,14 @@ from trader.core.components.responder import _recover
 from trader.core.models.domain import GeneralAnswer, MarketAnalysis
 
 
+def test_recover_prefers_tool_call_args():
+    raw = AIMessage(
+        content="",
+        tool_calls=[{"name": "GeneralAnswer", "args": {"summary": "from-tool"}, "id": "1"}],
+    )
+    assert _recover(raw, GeneralAnswer).summary == "from-tool"
+
+
 def test_recover_ignores_trailing_prose():
     raw = AIMessage('{"summary": "hello"}\nSome trailing prose that broke the parser.')
     assert _recover(raw, GeneralAnswer).summary == "hello"
