@@ -29,6 +29,8 @@ class Responder:
         prompt = self._base_prompt if skill is None else skill.responder_prompt
         schema = self._default_schema if skill is None else skill.output_schema
 
-        structured = self._model.with_structured_output(schema)
+        # Strict json_schema constrains decoding to the schema, so the model can't emit a
+        # trailing prose tail after the JSON object (which crashed the default parser).
+        structured = self._model.with_structured_output(schema, method="json_schema", strict=True)
         result: SkillResult = await structured.ainvoke([SystemMessage(prompt), *state["messages"]])
         return {"result": result, "messages": [AIMessage(result.summary)]}
