@@ -47,3 +47,10 @@ class WebFetchInput(BaseModel):
     url: str = Field(
         description="Full URL of a web page to read in detail.",
     )
+
+
+class OrderbookInput(BaseModel):
+    token_id: str = Field(
+        description="CLOB token id for the YES or NO side of a Polymarket market. "
+        "Available as the first element of `clob_token_ids` in the market data.",
+    )

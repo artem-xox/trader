@@ -53,6 +53,24 @@ def parse_market_detail(raw: dict, event_slug: str | None = None) -> dict:
     }
 
 
+def _clob_token_ids(raw: dict) -> list[str]:
+    """Extract CLOB token ids from the raw Gamma market object.
+
+    Gamma returns `clobTokenIds` as a JSON-encoded string (e.g. '["123","456"]').
+    """
+    raw_ids = raw.get("clobTokenIds")
+    if not raw_ids:
+        return []
+    if isinstance(raw_ids, str):
+        try:
+            parsed = json.loads(raw_ids)
+        except (ValueError, TypeError):
+            return []
+    else:
+        parsed = raw_ids
+    return [str(i) for i in parsed] if isinstance(parsed, list) else []
+
+
 def parse_market(raw: dict, event_slug: str | None) -> dict | None:
     """Reduce a raw Gamma market into the compact shape the agent reasons over."""
     if raw.get("closed") or not raw.get("active", True):
@@ -85,6 +103,7 @@ def parse_market(raw: dict, event_slug: str | None) -> dict | None:
         "volume": _to_float(raw.get("volume")),
         "liquidity": _to_float(raw.get("liquidity")),
         "ends_at": raw.get("endDate"),
+        "clob_token_ids": _clob_token_ids(raw),
     }
 
 

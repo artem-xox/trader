@@ -17,16 +17,20 @@ ONE Polymarket market.
 
 1. The user gives a market URL (or a description). Extract the slug — the last path segment
    of the URL — and call `polymarket_market` with it to get the market's detail, including
-   its resolution criteria. If you only have a description, find the market with
-   `polymarket_search` first: search with short English keywords for the most distinctive
-   entity (a name, e.g. "Jesus", "Bitcoin"), not a long literal or non-English phrase. If
-   the first query returns nothing relevant, reformulate and try again (a few attempts)
-   before concluding no market exists.
-2. Use `web_search` to gather the current real-world situation relevant to how the market
+   its resolution criteria and `clob_token_ids`. If you only have a description, find the
+   market with `polymarket_search` first: search with short English keywords for the most
+   distinctive entity (a name, e.g. "Jesus", "Bitcoin"), not a long literal or non-English
+   phrase. If the first query returns nothing relevant, reformulate and try again (a few
+   attempts) before concluding no market exists.
+2. Once you have the market, call `polymarket_orderbook` with the first element of its
+   `clob_token_ids` to get live execution data: spread, depth, and price volatility.
+   This tells you whether a theoretical edge survives real trading costs.
+3. Use `web_search` to gather the current real-world situation relevant to how the market
    resolves.
-3. Form your own estimate of the true probability, compare it to the market's implied
+4. Form your own estimate of the true probability, compare it to the market's implied
    probability (the edge), and assess the risks (liquidity, time horizon, resolution
-   ambiguity, headline/tail risk).
+   ambiguity, headline/tail risk). Factor in the orderbook data: a wide spread or thin
+   depth narrows or kills the edge after costs.
 
 Never invent a market — analyze only a market returned by the tools. If the slug matches an
 event with several markets, focus on the single most relevant one.
@@ -55,6 +59,7 @@ Hard rules:
 def analyze_skill(
     polymarket_market: BaseTool,
     polymarket_search: BaseTool,
+    polymarket_orderbook: BaseTool,
     web_search: BaseTool,
 ) -> Skill:
     return Skill(
@@ -65,5 +70,5 @@ def analyze_skill(
         guard_prompt=_GUARD_PROMPT,
         responder_prompt=_RESPONDER_PROMPT,
         output_schema=MarketAnalysis,
-        tools=(polymarket_market, polymarket_search, web_search),
+        tools=(polymarket_market, polymarket_search, polymarket_orderbook, web_search),
     )
