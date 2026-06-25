@@ -12,6 +12,7 @@ import json
 
 from langchain_core.language_models import BaseChatModel
 from langchain_core.messages import AIMessage, BaseMessage, SystemMessage
+from pydantic import ValidationError
 
 from trader.core.components.responder.prompts import BASE_RESPONDER_PROMPT
 from trader.core.models.domain import GeneralAnswer, SkillResult
@@ -20,15 +21,28 @@ from trader.core.skills.base import SkillRegistry
 
 
 def _recover(raw: BaseMessage, schema: type[SkillResult]) -> SkillResult:
-    """Rebuild the result from a raw message when the structured parser failed. Prefer the
-    tool-call arguments (function-calling path); fall back to decoding the first JSON object
-    out of the text content, ignoring any prose tail the model appended after it."""
+    """Rebuild the result from a raw message when the structured parser failed, never
+    crashing the turn. In order of preference:
+    1. the tool-call arguments (function-calling path);
+    2. the first JSON object embedded anywhere in the text content;
+    3. as a last resort, the raw text as the answer `summary` — so when the model replies
+       in prose with no usable JSON (normal mode -> GeneralAnswer) we still return an answer.
+    """
     tool_calls = getattr(raw, "tool_calls", None)
     if tool_calls:
         return schema.model_validate(tool_calls[0]["args"])
+
     content = raw.content if isinstance(raw.content, str) else str(raw.content)
-    obj, _ = json.JSONDecoder().raw_decode(content.strip())
-    return schema.model_validate(obj)
+    text = content.strip()
+    brace = text.find("{")
+    if brace != -1:
+        try:
+            obj, _ = json.JSONDecoder().raw_decode(text[brace:])
+            return schema.model_validate(obj)
+        except (json.JSONDecodeError, ValidationError):
+            pass
+
+    return schema(summary=text or "(no answer produced)")
 
 
 class Responder:
@@ -51,7 +65,6 @@ class Responder:
             schema, method="function_calling", include_raw=True
         )
         out = await structured.ainvoke([SystemMessage(prompt), *state["messages"]])
-        result: SkillResult = out["parsed"] if out["parsing_error"] is None else _recover(
-            out["raw"], schema
-        )
+        parsed = out["parsed"]
+        result: SkillResult = parsed if parsed is not None else _recover(out["raw"], schema)
         return {"result": result, "messages": [AIMessage(result.summary)]}

@@ -1,12 +1,11 @@
 """Offline tests for the responder's tolerant JSON recovery.
 
-Strict structured output normally guarantees clean JSON, but the model occasionally appends
-a prose tail after the object; `_recover` salvages the turn instead of crashing it.
+Function-calling normally returns clean tool-call args, but the model can occasionally
+answer in prose or wrap the JSON in text; `_recover` salvages the turn instead of crashing.
 """
 
 from __future__ import annotations
 
-import pytest
 from langchain_core.messages import AIMessage
 
 from trader.core.components.responder import _recover
@@ -42,6 +41,16 @@ def test_recover_validates_against_schema():
     assert result.stance.value == "pass"
 
 
-def test_recover_raises_on_no_json():
-    with pytest.raises(ValueError):
-        _recover(AIMessage("not json at all"), GeneralAnswer)
+def test_recover_falls_back_to_prose_summary():
+    # No tool call and no JSON: keep the prose as the answer instead of crashing.
+    raw = AIMessage("The latest iOS is 18, with better battery life.")
+    assert _recover(raw, GeneralAnswer).summary == "The latest iOS is 18, with better battery life."
+
+
+def test_recover_finds_json_after_prose():
+    raw = AIMessage('Here is the answer:\n{"summary": "ok"}')
+    assert _recover(raw, GeneralAnswer).summary == "ok"
+
+
+def test_recover_empty_content_does_not_crash():
+    assert _recover(AIMessage(""), GeneralAnswer).summary == "(no answer produced)"
