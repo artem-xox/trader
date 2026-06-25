@@ -1,24 +1,28 @@
 """Agent tools.
 
-Two real tools for the first iteration:
 - `polymarket_search`: active markets via the public Gamma API (no auth).
-- `web_search`: general web search via Tavily, for context/news around a topic.
+- `polymarket_market`: full detail for one market via the Gamma API.
+- `polymarket_orderbook`: live CLOB snapshot — spread, depth, price history (no auth).
+- `web_search`: general web search via Tavily, for context/news.
 
-Both return JSON strings so the model reasons over a consistent, compact shape. Prices
+All return JSON strings so the model reasons over a consistent, compact shape. Prices
 are normalized to implied probabilities. The tools close over injected clients — they
 are built in the composition root (`trader.core.bootstrap`), not at import time.
 """
 
 from __future__ import annotations
 
+import json
 from datetime import datetime, timezone
 
 from langchain_core.tools import BaseTool, tool
 
 from trader.core.clients import PolymarketClient, TavilyClient
+from trader.core.clients.clob import ClobClient
 from trader.core.tools.calc import safe_eval
 from trader.core.tools.schemas import (
     CalculatorInput,
+    OrderbookInput,
     PolymarketMarketInput,
     PolymarketSearchInput,
     WebFetchInput,
@@ -26,7 +30,11 @@ from trader.core.tools.schemas import (
 )
 
 
-def build_tools(polymarket: PolymarketClient, tavily: TavilyClient) -> list[BaseTool]:
+def build_tools(
+    polymarket: PolymarketClient,
+    tavily: TavilyClient,
+    clob: ClobClient | None = None,
+) -> list[BaseTool]:
     @tool(args_schema=PolymarketSearchInput)
     async def polymarket_search(query: str, limit: int = 8) -> str:
         """Search active Polymarket prediction markets matching a topic or keyword.
@@ -97,9 +105,33 @@ def build_tools(polymarket: PolymarketClient, tavily: TavilyClient) -> list[Base
         """
         return await tavily.fetch(url)
 
+    _clob = clob or ClobClient()
+
+    @tool(args_schema=OrderbookInput)
+    async def polymarket_orderbook(token_id: str) -> str:
+        """Fetch live CLOB order-book data for a Polymarket token.
+
+        Returns a JSON object with: best_bid, best_ask, mid, spread_bps,
+        depth_within_2_ticks_usd (USD depth within 2 ticks of mid on both sides),
+        realised_vol_1h and realised_vol_24h (price standard deviation), last_trade_price,
+        tick_size, min_order_size_usd, and the top-5 bid/ask levels.
+
+        The token_id is the first element of `clob_token_ids` from the market data
+        (use polymarket_search or polymarket_market to get it first). For binary markets
+        there are two tokens — YES (index 0) and NO (index 1); use the YES token_id to get
+        the YES side book; the NO side is implicit (NO price ≈ 1 − YES price).
+
+        Use this to assess execution cost before recommending a trade: a wide spread_bps
+        or thin depth_within_2_ticks_usd means the edge may not survive after fees and
+        slippage.
+        """
+        snapshot = await _clob.orderbook_snapshot(token_id)
+        return json.dumps(snapshot)
+
     return [
         polymarket_search,
         polymarket_market,
+        polymarket_orderbook,
         web_search,
         current_datetime,
         calculator,
