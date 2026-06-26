@@ -35,14 +35,17 @@ def _build_backend_and_evaluators():
     return LangSmithBackend(agent), evaluators
 
 
-async def _run(skill: str | None, experiment_name: str | None) -> None:
+async def _run(skill: str | None, experiment_name: str | None, limit: int | None) -> None:
     backend, evaluators = _build_backend_and_evaluators()
     targets = [skill] if skill else skills()
 
     async def run_one(name: str):
         cases = load_cases(name)
-        print(f"running '{name}': {len(cases)} case(s)...")
-        experiment = await backend.run(name, cases, evaluators, experiment_name=experiment_name)
+        shown = min(limit, len(cases)) if limit else len(cases)
+        print(f"running '{name}': {shown} of {len(cases)} case(s)...")
+        experiment = await backend.run(
+            name, cases, evaluators, experiment_name=experiment_name, limit=limit
+        )
         return name, experiment, backend.summarize(experiment)
 
     # Run all datasets concurrently (each already fans out internally via max_concurrency).
@@ -84,6 +87,7 @@ def main() -> None:
     run_p = sub.add_parser("run", help="run evals for one or all skills")
     run_p.add_argument("--skill", help="skill to run; omit for all")
     run_p.add_argument("--name", help="postfix for experiment names (e.g. smarter-models)")
+    run_p.add_argument("--limit", type=int, help="evaluate only the first N cases per skill")
 
     sub.add_parser("list", help="list skills and their cases")
 
@@ -95,7 +99,7 @@ def main() -> None:
 
     args = parser.parse_args()
     if args.command == "run":
-        asyncio.run(_run(args.skill, args.name))
+        asyncio.run(_run(args.skill, args.name, args.limit))
     elif args.command == "list":
         _list()
     elif args.command == "add-case":

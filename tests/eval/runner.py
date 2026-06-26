@@ -7,10 +7,13 @@ dataset, link traces, push scores) for a given vendor. The CLI wires the two tog
 
 from __future__ import annotations
 
+import os
 import uuid
+from contextlib import AbstractContextManager, nullcontext
 from typing import Protocol
 
 from langchain_core.messages import HumanMessage
+from langsmith import tracing_context
 
 from tests.eval.cases import Case
 from tests.eval.evaluators import EvalSample, Evaluator
@@ -19,6 +22,20 @@ from trader.core.models.protocols import Agent
 
 
 _RESULT_SNIPPET_CHARS = 500
+
+
+def eval_tracing() -> AbstractContextManager:
+    """Suppress nested LangSmith runs during eval unless EVAL_TRACE is set.
+
+    `aevaluate` always records each example's root run and its scores; what burns quota is
+    the *nested* agent/judge LLM and tool runs hung under those roots. Wrapping the agent
+    and judge calls in `tracing_context(enabled=False)` drops those children while keeping
+    the roots and feedback (so summarize() still works, minus native cost/token totals).
+    Set EVAL_TRACE=true (e.g. `make eval TRACE=true`) to keep full traces for debugging.
+    """
+    if os.getenv("EVAL_TRACE", "").lower() in ("1", "true", "yes"):
+        return nullcontext()
+    return tracing_context(enabled=False)
 
 
 def _tool_trajectory(messages: list) -> list[dict]:
@@ -50,13 +67,14 @@ async def run_agent(agent: Agent, case: Case) -> EvalSample:
     Reaches into the compiled graph (like the LLM-test fixtures) because evaluators need
     the chosen skill and the tool outputs, not just the public `SkillResult`.
     """
-    state = await agent._graph.ainvoke(  # type: ignore[attr-defined]
-        {"messages": [HumanMessage(case.input)]},
-        config={
-            "recursion_limit": agent._settings.agent_max_iterations * 6 + 10,  # type: ignore[attr-defined]
-            "configurable": {"thread_id": uuid.uuid4().hex},
-        },
-    )
+    with eval_tracing():
+        state = await agent._graph.ainvoke(  # type: ignore[attr-defined]
+            {"messages": [HumanMessage(case.input)]},
+            config={
+                "recursion_limit": agent._settings.agent_max_iterations * 6 + 10,  # type: ignore[attr-defined]
+                "configurable": {"thread_id": uuid.uuid4().hex},
+            },
+        )
     result = state["result"]
     tool_calls = _tool_trajectory(state["messages"])
     return EvalSample(

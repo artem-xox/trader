@@ -12,7 +12,7 @@ from langsmith import Client, aevaluate
 
 from tests.eval.cases import Case
 from tests.eval.evaluators import EvalSample, Evaluator
-from tests.eval.runner import run_agent
+from tests.eval.runner import eval_tracing, run_agent
 from trader.core.models.protocols import Agent
 
 
@@ -78,6 +78,7 @@ class LangSmithBackend:
         evaluators: list[Evaluator],
         *,
         experiment_name: str | None = None,
+        limit: int | None = None,
     ) -> str:
         self._sync(skill, cases)
         by_id = {case.id: case for case in cases}
@@ -88,9 +89,16 @@ class LangSmithBackend:
         async def target(inputs: dict) -> dict:
             return _sample_payload(await run_agent(self._agent, by_id[inputs["id"]]))
 
+        # Sync keeps the dataset whole; `limit` only evaluates the first N examples (fast
+        # iteration), passing them explicitly instead of the dataset name so the rest aren't
+        # deleted or run.
+        data = _dataset_name(skill)
+        if limit is not None:
+            data = list(self._client.list_examples(dataset_name=data))[:limit]
+
         results = await aevaluate(
             target,
-            data=_dataset_name(skill),
+            data=data,
             evaluators=[_adapt(ev, by_id) for ev in evaluators],
             experiment_prefix=prefix,
             client=self._client,
@@ -156,7 +164,8 @@ def _adapt(evaluator: Evaluator, by_id: dict[str, Case]):
             num_tool_calls=payload.get("num_tool_calls", 0),
             tool_calls=payload.get("tool_calls", []),
         )
-        score = await evaluator.evaluate(sample)
+        with eval_tracing():
+            score = await evaluator.evaluate(sample)
         if score is None:
             return {"results": []}  # not applicable — emit no feedback (no stray key)
         return {"results": [{"key": score.key, "score": score.value, "comment": score.comment}]}
