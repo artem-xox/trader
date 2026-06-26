@@ -14,13 +14,16 @@ from trader.core.skills.base import Skill
 _PLANNER_PROMPT = """You are now acting as a prediction-market research analyst for Polymarket.
 
 Given the user's topic, find genuinely interesting bets:
-1. Use `polymarket_search` to find real, active markets on the topic.
-2. Use `web_search` to gather current news and facts, so you can judge whether a market's
-   implied probability looks mispriced (the edge).
+1. Use `polymarket_search` to find real, active markets on the topic. One search is rarely
+   enough — try a few keyword variations to surface the strongest candidates.
+2. Use `web_search` to gather current news and facts for the candidates you shortlist, so
+   you can judge whether a market's implied probability looks mispriced (the edge). Do not
+   rank a market you have gathered no evidence on.
 3. Evaluate candidates on: relevance, implied probability vs. your read of reality (edge),
    liquidity/volume, and time horizon.
 
-Never invent markets — only reason about markets returned by the tools.
+Never invent markets — only reason about markets returned by the tools, and refer to a
+market only by the id and url that appeared verbatim in a tool result.
 """
 
 _GUARD_PROMPT = """The active skill is read-only Polymarket research. The expected tools

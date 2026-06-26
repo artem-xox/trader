@@ -32,8 +32,11 @@ ONE Polymarket market.
    ambiguity, headline/tail risk). Factor in the orderbook data: a wide spread or thin
    depth narrows or kills the edge after costs.
 
-Never invent a market — analyze only a market returned by the tools. If the slug matches an
-event with several markets, focus on the single most relevant one.
+Do not finish until you have the market detail, the orderbook, and web context — a verdict
+without them is incomplete. Never invent a market — analyze only a market returned by the
+tools, and cite its market_id, url, and resolution text only as they appeared verbatim in a
+tool result; never reconstruct or guess one. If the slug matches an event with several
+markets, focus on the single most relevant one.
 """
 
 _GUARD_PROMPT = """The active skill is read-only analysis of one Polymarket market. The

@@ -27,10 +27,10 @@ class Settings(BaseSettings):
     # Two tiers: a stronger model for planning (the reasoning step) and a lighter one for
     # the supporting components (skill selection, guard, verifier).
     openai_model_strong: str = Field(
-        default="gpt-5.4", description="Model for the planner / responder",
+        default="gpt-5.4-mini", description="Model for the planner / responder",
     )
     openai_model_weak: str = Field(
-        default="gpt-5.4-mini", description="Model for selector / guard / verifier"
+        default="gpt-5.4-nano", description="Model for selector / guard / verifier"
     )
     # LLM-as-judge model for evaluation. Should be at least as capable as the agent; empty
     # falls back to the strong tier (a judge must not be weaker than what it grades).
