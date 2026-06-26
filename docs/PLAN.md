@@ -26,7 +26,9 @@ The custom ReAct-with-skills agent runs end-to-end locally and is deployed to Di
 **Done:**
 
 - Custom LangGraph graph: `skills → planner → guard → executor → responder → verifier`,
-  with an iteration budget and a guard/verifier feedback channel.
+  with an iteration budget and a guard/verifier feedback channel. The executor is LangGraph's
+  `ToolNode` (per-tool error capture); the LLM nodes carry a `RetryPolicy` for transient API
+  failures.
 - Skills layer (`Skill` + `SkillRegistry` + selector node), with first-class normal mode.
   Selection by explicit slash command or LLM intent. One skill per turn.
 - Skills: **`find`** (rank interesting bets) and **`analyze`** (deep dive on one market with
@@ -199,6 +201,36 @@ taken now:** market-making / Avellaneda–Stoikov, naïve spread capture.
 - **Eval breadth.** More cases, a `normal` dataset, CI gate on `grounding == 1.0`.
 - **Skill ergonomics.** Optionally move "what to verify / how to format" onto the `Skill`
   so the verifier and formatter stop knowing about concrete schemas.
+
+#### LangGraph features to adopt
+
+Our graph already uses `StateGraph`, the `add_messages` reducer, conditional edges, and a
+checkpointer. These are the unused capabilities worth pulling in, each tied to the phase it
+serves. *(Done: `ToolNode` now backs the executor; `RetryPolicy` wraps the LLM nodes.)*
+
+- **Human-in-the-loop guard via `interrupt()` — gates Phase 5.** Today the guard is a
+  permissive stub. When trading tools land, make it a real approval gate with LangGraph
+  `interrupt()`: the graph pauses on the checkpointer, the proposed order is surfaced to the
+  user in Telegram, and the run resumes via `Command(resume=...)` on approval. The
+  checkpointer + `thread_id` plumbing this needs already exists, so no bespoke approval
+  state machine — this is the natural mechanism for the Phase 5 "human-in-the-loop
+  confirmation before any irreversible action" step. (See Phase 5+.)
+- **Streaming to Telegram — serves the UX open question, useful from Phase 1 on.** Replace
+  the single `invoke()` blob with `graph.astream(stream_mode="updates")` to push progress
+  ("selected skill → searching markets → checking order book") during long `find`/`analyze`
+  loops, and `get_stream_writer()` (`stream_mode="custom"`) to emit custom status lines from
+  inside the planner. Resolves the "streaming partial results vs. one final message" open
+  question without a rewrite.
+- **`Send` fan-out (map-reduce) — serves Phase 2/3.** When `distribute` allocates across N
+  markets and `find` analyses several candidates, use LangGraph's `Send` to dispatch N
+  parallel per-market sub-runs and fan the results back in, instead of a hand-rolled
+  `asyncio.gather` inside one node. The graph is strictly sequential today; `Send` is the
+  idiomatic way to parallelise the multi-market work those skills introduce.
+- **`BaseStore` cross-thread memory — serves cost-aware personalisation.** The checkpointer
+  persists one `thread_id`'s history; `langgraph.store.BaseStore` adds cross-thread memory
+  (user risk profile, prior recommendations, budget) that `analyze`/`distribute` can read to
+  tailor sizing across conversations. Pairs with the Persistence item above (Postgres-backed
+  store).
 
 ---
 

@@ -20,6 +20,7 @@ from __future__ import annotations
 
 from langgraph.checkpoint.base import BaseCheckpointSaver
 from langgraph.graph import END, START, StateGraph
+from langgraph.types import RetryPolicy
 
 from trader.common.config import Settings
 from trader.core.agents.base import BaseAgent
@@ -81,11 +82,16 @@ class ReActAgent(BaseAgent):
 
         builder = StateGraph(AgentState)
 
-        builder.add_node("skills", self._selector)
-        builder.add_node("planner", self._planner)
+        # Retry the nodes that hit the LLM/network on transient failures (connection
+        # errors, 5xx, rate limits). The default policy skips deterministic errors like
+        # ValueError/ValidationError, so a bad parse fails fast instead of looping.
+        retry = RetryPolicy()
+
+        builder.add_node("skills", self._selector, retry_policy=retry)
+        builder.add_node("planner", self._planner, retry_policy=retry)
         builder.add_node("guard", self._guard)
         builder.add_node("executor", self._executor)
-        builder.add_node("responder", self._responder)
+        builder.add_node("responder", self._responder, retry_policy=retry)
         builder.add_node("verifier", self._verifier)
 
         builder.add_edge(START, "skills")

@@ -1,35 +1,23 @@
 """Executor — the "act" step of the ReAct loop.
 
-Runs the tool calls requested by the planner in parallel and returns their results as
-ToolMessages.
+Delegates to LangGraph's `ToolNode`: it runs the tool calls the planner requested in
+parallel and returns their results as ToolMessages. Unlike a bare `asyncio.gather`,
+`ToolNode` catches a tool that raises and turns it into a ToolMessage carrying the error,
+so one failing tool feeds the planner a recoverable message instead of crashing the turn.
 """
 
 from __future__ import annotations
 
-import asyncio
-
-from langchain_core.messages import ToolMessage
 from langchain_core.tools import BaseTool
+from langgraph.prebuilt import ToolNode
 
 from trader.core.models.schemas import AgentState, ExecutorResponse
 
 
 class Executor:
     def __init__(self, tools: list[BaseTool]) -> None:
-        self._tools_by_name = {tool.name: tool for tool in tools}
-
-    async def _run_tool_call(self, call: dict) -> ToolMessage:
-        tool = self._tools_by_name[call["name"]]
-        output = await tool.ainvoke(call["args"])
-        return ToolMessage(
-            content=str(output),
-            name=call["name"],
-            tool_call_id=call["id"],
-        )
+        # handle_tool_errors defaults to True: a raising tool becomes an error ToolMessage.
+        self._node = ToolNode(tools)
 
     async def __call__(self, state: AgentState) -> ExecutorResponse:
-        last = state["messages"][-1]
-        results = await asyncio.gather(
-            *(self._run_tool_call(call) for call in last.tool_calls)
-        )
-        return {"messages": list(results)}
+        return await self._node.ainvoke(state)
