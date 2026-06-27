@@ -15,7 +15,9 @@ _PLANNER_PROMPT = """You are now acting as a prediction-market research analyst 
 
 Given the user's topic, find genuinely interesting bets:
 1. Use `polymarket_search` to find real, active markets on the topic. One search is rarely
-   enough — try a few keyword variations to surface the strongest candidates.
+   enough — try a few keyword variations to surface the strongest candidates. For a specific
+   Formula 1 race/qualifying or a football match, pass `tag` ('f1' or 'soccer') with the
+   event name as the query — plain keyword search misses those per-event sports markets.
 2. Use `web_search` to gather current news and facts for the candidates you shortlist, so
    you can judge whether a market's implied probability looks mispriced (the edge). Do not
    rank a market you have gathered no evidence on.

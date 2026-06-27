@@ -37,18 +37,23 @@ def build_tools(
     clob: ClobClient | None = None,
 ) -> list[BaseTool]:
     @tool(args_schema=PolymarketSearchInput)
-    async def polymarket_search(query: str, limit: int = 8) -> str:
+    async def polymarket_search(query: str, limit: int = 8, tag: str | None = None) -> str:
         """Search active Polymarket prediction markets matching a topic or keyword.
 
         Markets are indexed in English, so search with short English keywords for the most
         distinctive entity (a name, e.g. "Jesus", "Bitcoin"), not a long literal phrase or a
         non-English one. If a query returns nothing relevant, reformulate and try again.
 
+        For individual sports events — a specific Formula 1 race or qualifying, or a single
+        football (soccer) match — set `tag` to the category ('f1' or 'soccer') and use the
+        event name as the query (e.g. query="Austrian Grand Prix", tag="f1"). The general
+        keyword index does NOT surface these per-event sports markets; a tagged search does.
+
         Returns a JSON list of markets with their question, current implied probabilities
         per outcome, traded volume, liquidity, end date, and a link. Use this to find real
         markets before suggesting any bet — never invent markets.
         """
-        return await polymarket.search(query, limit=limit)
+        return await polymarket.search(query, limit=limit, tag=tag)
 
     @tool(args_schema=PolymarketMarketInput)
     async def polymarket_market(slug: str) -> str:

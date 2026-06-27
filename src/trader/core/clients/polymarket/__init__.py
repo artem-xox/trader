@@ -3,11 +3,27 @@
 from __future__ import annotations
 
 import json
+import re
 
 import httpx
 
 GAMMA_BASE_URL = "https://gamma-api.polymarket.com"
 _TIMEOUT = httpx.Timeout(15.0)
+
+
+def _filter_events_by_query(events: list[dict], query: str) -> list[dict]:
+    """Keep tag-browsed events whose title matches the query (Gamma's `/events` has no text
+    search, so we filter client-side). Prefer events matching ALL query words; if none do,
+    fall back to those matching any longer word — so a slightly-off phrasing still narrows."""
+    tokens = [t for t in re.findall(r"[a-z0-9]+", query.lower()) if len(t) >= 3]
+    if not tokens:
+        return events
+    titles = [(e, (e.get("title") or "").lower()) for e in events]
+    strict = [e for e, title in titles if all(t in title for t in tokens)]
+    if strict:
+        return strict
+    long_tokens = [t for t in tokens if len(t) >= 4]
+    return [e for e, title in titles if any(t in title for t in long_tokens)]
 
 
 def _to_float(value: str | float | None) -> float | None:
@@ -116,7 +132,12 @@ class PolymarketClient:
         self._base_url = base_url
         self._timeout = timeout
 
-    async def search(self, query: str, limit: int = 8) -> str:
+    async def search(self, query: str, limit: int = 8, tag: str | None = None) -> str:
+        # When a category `tag` is given, browse that category instead of the keyword index:
+        # Gamma's `/public-search` does not surface per-event sports markets (e.g. a single
+        # F1 race or football match), but they are reachable by tag. See `_search_by_tag`.
+        if tag:
+            return await self._search_by_tag(tag, query, limit)
         # `events_status=active` is required: without it Gamma ranks resolved/old markets
         # first and can bury (or omit) the active ones entirely — e.g. "nvidia" otherwise
         # returns only closed markets and looks like "no markets". The `active`/`closed`
@@ -150,6 +171,47 @@ class PolymarketClient:
 
         if not markets:
             return f"No active Polymarket markets found for query: {query!r}."
+        return json.dumps(markets, ensure_ascii=False)
+
+    async def _search_by_tag(self, tag: str, query: str, limit: int) -> str:
+        """Browse a category by tag, then narrow to the query client-side.
+
+        `/events?tag_slug=<tag>` lists the category's active events (highest-volume first);
+        we filter them by the query and return the matching markets. This is how a specific
+        race or fixture is found, since the keyword index omits them.
+        """
+        params = {
+            "tag_slug": tag,
+            "active": "true",
+            "closed": "false",
+            "limit": 100,
+            "order": "volume",
+            "ascending": "false",
+        }
+        try:
+            async with httpx.AsyncClient(timeout=self._timeout) as client:
+                resp = await client.get(f"{self._base_url}/events", params=params)
+                resp.raise_for_status()
+                events = resp.json()
+        except httpx.HTTPError as exc:
+            return f"Polymarket tag search failed: {exc}"
+        if not isinstance(events, list):
+            return f"No Polymarket events found for tag: {tag!r}."
+
+        markets: list[dict] = []
+        for event in _filter_events_by_query(events, query):
+            event_slug = event.get("slug")
+            for raw_market in event.get("markets", []):
+                parsed = parse_market(raw_market, event_slug)
+                if parsed:
+                    markets.append(parsed)
+                if len(markets) >= limit:
+                    break
+            if len(markets) >= limit:
+                break
+
+        if not markets:
+            return f"No active Polymarket markets found for {query!r} in category {tag!r}."
         return json.dumps(markets, ensure_ascii=False)
 
     async def market(self, slug: str) -> str:

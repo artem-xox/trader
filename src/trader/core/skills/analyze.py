@@ -20,8 +20,10 @@ ONE Polymarket market.
    its resolution criteria and `clob_token_ids`. If you only have a description, find the
    market with `polymarket_search` first: search with short English keywords for the most
    distinctive entity (a name, e.g. "Jesus", "Bitcoin"), not a long literal or non-English
-   phrase. If the first query returns nothing relevant, reformulate and try again (a few
-   attempts) before concluding no market exists.
+   phrase. For a specific F1 race/qualifying or a football match, pass `tag` ('f1' or
+   'soccer') with the event name as the query — plain search misses those. If the first
+   query returns nothing relevant, reformulate and try again (a few attempts) before
+   concluding no market exists.
 2. Once you have the market, call `polymarket_orderbook` with the first element of its
    `clob_token_ids` to get live execution data: spread, depth, and price volatility.
    This tells you whether a theoretical edge survives real trading costs.

@@ -7,13 +7,22 @@ from pydantic import BaseModel, Field
 
 class PolymarketSearchInput(BaseModel):
     query: str = Field(
-        description="Topic or keyword to search active Polymarket prediction markets for.",
+        description="Topic or keyword to search active Polymarket prediction markets for. "
+        "With `tag` set, use the distinctive event name (e.g. 'Austrian Grand Prix', "
+        "'Algeria vs Austria').",
     )
     limit: int = Field(
         default=8,
         ge=1,
         le=20,
         description="Maximum number of markets to return.",
+    )
+    tag: str | None = Field(
+        default=None,
+        description="Optional category to scope the search to. Required for individual "
+        "sports events (a single F1 race/qualifying, one football match), which the keyword "
+        "index does not surface. Supported: 'f1' (Formula 1) and 'soccer' (football: World "
+        "Cup, leagues, single fixtures). Leave unset for general topics.",
     )
 
 
