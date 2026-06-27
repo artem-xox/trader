@@ -23,7 +23,7 @@ from langgraph.graph import END, START, StateGraph
 from langgraph.types import RetryPolicy
 
 from trader.common.config import Settings
-from trader.core.agents.base import BaseAgent
+from trader.core.agents.base import BaseAgent, silent_router
 from trader.core.models.domain import SkillResult
 from trader.core.models.protocols import Executor, Guard, Planner, Responder, Selector, Verifier
 from trader.core.models.schemas import AgentState, GuardVerdict, Messages, PlannerAction, ReviewVerdict
@@ -98,23 +98,23 @@ class ReActAgent(BaseAgent):
         builder.add_edge("skills", "planner")
         builder.add_conditional_edges(
             "planner",
-            self._route_after_planner,
+            silent_router(self._route_after_planner),
             {PlannerAction.ACT: "guard", PlannerAction.ANSWER: "responder"},
         )
         builder.add_conditional_edges(
             "guard",
-            self._route_after_guard,
+            silent_router(self._route_after_guard),
             {GuardVerdict.ALLOW: "executor", GuardVerdict.BLOCK: "planner"},
         )
         builder.add_conditional_edges(
             "executor",
-            self._route_after_executor,
+            silent_router(self._route_after_executor),
             {"planner": "planner", "responder": "responder"},
         )
         builder.add_edge("responder", "verifier")
         builder.add_conditional_edges(
             "verifier",
-            self._route_after_verifier,
+            silent_router(self._route_after_verifier),
             {ReviewVerdict.OK: END, ReviewVerdict.REVISE: "planner"},
         )
 
