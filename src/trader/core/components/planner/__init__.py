@@ -39,4 +39,13 @@ class Planner:
 
         model = self._model.bind_tools(tools) if tools else self._model
         response = await model.ainvoke([SystemMessage(prompt), *state["messages"]])
-        return {"messages": [response], "iteration": state.get("iteration", 0) + 1}
+        # A pure-`think` step gathers no evidence — it must not spend the research budget,
+        # or thinking right before the budget runs out would skip the act it just planned.
+        # Real steps (tool calls or a drafted answer) still count. A think *straight after*
+        # another think is charged, so a runaway think-chain can't stall the loop forever.
+        tool_calls = getattr(response, "tool_calls", None) or []
+        is_think_only = bool(tool_calls) and all(call["name"] == "think" for call in tool_calls)
+        last = state["messages"][-1] if state["messages"] else None
+        after_think = getattr(last, "type", None) == "tool" and getattr(last, "name", None) == "think"
+        step = 0 if (is_think_only and not after_think) else 1
+        return {"messages": [response], "iteration": state.get("iteration", 0) + step}

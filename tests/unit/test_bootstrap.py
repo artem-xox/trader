@@ -17,4 +17,4 @@ def test_model_tiers_are_wired_correctly():
 
     assert agent._planner._model.model_name == "strong-x"
     assert agent._responder._model.model_name == "strong-x"
-    assert agent._selector._model.first.bound.model_name == "weak-y"
+    assert agent._selector._model.model_name == "weak-y"

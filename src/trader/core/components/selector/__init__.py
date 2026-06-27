@@ -16,6 +16,7 @@ from langchain_core.messages import HumanMessage, SystemMessage
 from pydantic import BaseModel, Field
 
 from trader.core.components.selector.prompts import SELECTOR_PROMPT
+from trader.core.components.structured import structured_call
 from trader.core.models.schemas import AgentState, Messages, SelectorResponse
 from trader.core.skills.base import SkillRegistry
 
@@ -33,7 +34,7 @@ def _latest_user_text(messages: Messages) -> str:
 
 class Selector:
     def __init__(self, model: BaseChatModel, registry: SkillRegistry) -> None:
-        self._model = model.with_structured_output(_SkillChoice)
+        self._model = model
         self._registry = registry
 
     async def __call__(self, state: AgentState) -> SelectorResponse:
@@ -41,10 +42,12 @@ class Selector:
 
         name = self._registry.match_command(text)
         if name is None:
-            choice = await self._model.ainvoke(
-                [SystemMessage(SELECTOR_PROMPT.format(catalog=self._registry.catalog())), HumanMessage(text)]
+            _, choice = await structured_call(
+                self._model,
+                _SkillChoice,
+                [SystemMessage(SELECTOR_PROMPT.format(catalog=self._registry.catalog())), HumanMessage(text)],
             )
-            name = choice.skill
+            name = choice.skill if choice is not None else ""
 
-        # Normalize an unknown/"none" choice to normal mode (empty name).
+        # Normalize an unknown/"none" choice (or a failed parse) to normal mode (empty name).
         return {"skill": name if self._registry.get(name) else ""}

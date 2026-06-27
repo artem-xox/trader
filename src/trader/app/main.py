@@ -14,6 +14,7 @@ from fastapi import Depends, FastAPI, HTTPException, Security, status
 from fastapi.security import APIKeyHeader
 from langchain_core.messages import HumanMessage
 from langchain_core.tracers.context import tracing_v2_enabled
+from langsmith import tracing_context
 
 from trader.app.formatting import format_result
 from trader.app.schemas import InvokeRequest, InvokeResponse
@@ -58,9 +59,11 @@ async def invoke(req: InvokeRequest) -> InvokeResponse:
     settings = get_settings()
     messages = [HumanMessage(req.message)]
 
-    # In debug mode, wrap the run so we can hand back its LangSmith trace URL. The tracer
-    # is installed via context, so the agent picks it up without any changes to its config.
-    if req.debug and settings.langsmith_tracing:
+    # Tracing is opt-in per turn. Only a debug request (Telegram /debug, or `debug: true` on
+    # the API) ships a trace to LangSmith and hands back its URL; the tracer is installed via
+    # context, so the agent picks it up without any changes to its config. A configured API
+    # key is the one prerequisite — without it there is nowhere to upload.
+    if req.debug and settings.langsmith_api_key:
         with tracing_v2_enabled(project_name=settings.langsmith_project) as cb:
             result: SkillResult = await agent.invoke(messages, thread_id=req.thread_id)
             try:
@@ -70,5 +73,8 @@ async def invoke(req: InvokeRequest) -> InvokeResponse:
                 trace_url = None
         return InvokeResponse(response=format_result(result), result=result, trace_url=trace_url)
 
-    result = await agent.invoke(messages, thread_id=req.thread_id)
+    # Every non-debug turn runs with tracing forced off, so routine traffic never ships a
+    # trace even if LANGSMITH_TRACING is left enabled globally.
+    with tracing_context(enabled=False):
+        result = await agent.invoke(messages, thread_id=req.thread_id)
     return InvokeResponse(response=format_result(result), result=result)
