@@ -25,6 +25,7 @@ from trader.core.tools.schemas import (
     OrderbookInput,
     PolymarketMarketInput,
     PolymarketSearchInput,
+    ThinkInput,
     WebFetchInput,
     WebSearchInput,
 )
@@ -128,6 +129,18 @@ def build_tools(
         snapshot = await _clob.orderbook_snapshot(token_id)
         return json.dumps(snapshot)
 
+    @tool(args_schema=ThinkInput)
+    async def think(thought: str) -> str:
+        """Think out loud before acting or answering — a private scratchpad.
+
+        This fetches nothing and changes nothing; it just gives you space to lay out your
+        reasoning, weigh mixed evidence, work through numbers step by step, or plan your
+        next tool calls. Use it when the task is non-trivial — especially before committing
+        to a stance, a probability estimate, or a final answer. One deliberate think step
+        beats rushing to a shallow conclusion.
+        """
+        return "Noted — continue."
+
     return [
         polymarket_search,
         polymarket_market,
@@ -136,4 +149,5 @@ def build_tools(
         current_datetime,
         calculator,
         web_fetch,
+        think,
     ]

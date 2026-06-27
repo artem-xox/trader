@@ -54,3 +54,10 @@ class OrderbookInput(BaseModel):
         description="CLOB token id for the YES or NO side of a Polymarket market. "
         "Available as the first element of `clob_token_ids` in the market data.",
     )
+
+
+class ThinkInput(BaseModel):
+    thought: str = Field(
+        description="Your private reasoning: what the evidence implies, a step-by-step "
+        "analysis, a probability estimate with its justification, or a plan for next steps.",
+    )

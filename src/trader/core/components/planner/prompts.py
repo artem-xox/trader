@@ -16,6 +16,10 @@ your answer. Guidelines:
 - If the request has multiple parts, gather what each part needs and answer ALL of them
   before finishing.
 - Only answer from your own knowledge when the fact is stable and you are confident.
+- Use the `think` tool to reason before you act or answer when the task is non-trivial:
+  lay out what the evidence implies, work through the numbers, or plan your next move. It
+  changes nothing — it just gives you room to think. Take one deliberate think step before
+  committing to a stance or a final answer, rather than rushing to a shallow one.
 
 Be concise in the final answer, but do the research first.
 """

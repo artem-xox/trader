@@ -46,8 +46,8 @@ def build_agent(
         TavilyClient(api_key=settings.tavily_api_key),
         ClobClient(),
     )
-    # general = [current_datetime, calculator, web_fetch] — read-only helpers available
-    # everywhere (every skill and normal mode).
+    # general = [current_datetime, calculator, web_fetch, think] — read-only helpers
+    # available everywhere (every skill and normal mode).
     registry = build_registry(
         polymarket_search, polymarket_market, polymarket_orderbook, web_search, general
     )
