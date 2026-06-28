@@ -6,9 +6,11 @@ implementations (components, agents) can be swapped without touching callers.
 
 from __future__ import annotations
 
+from collections.abc import AsyncIterator
 from typing import Protocol, runtime_checkable
 
 from trader.core.models.domain import SkillResult
+from trader.core.models.streaming import ProgressEvent
 from trader.core.models.schemas import (
     AgentState,
     ExecutorResponse,
@@ -72,3 +74,9 @@ class Agent(Protocol):
     """
 
     async def invoke(self, messages: Messages, *, thread_id: str | None = None) -> SkillResult: ...
+
+    def astream(
+        self, messages: Messages, *, thread_id: str | None = None
+    ) -> AsyncIterator[ProgressEvent]:
+        """Run a turn and yield progress events, ending with the terminal `final` event."""
+        ...
