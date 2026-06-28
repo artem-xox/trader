@@ -21,7 +21,11 @@ from trader.core.components.verifier import _market_ids_seen
 from trader.core.models.protocols import Agent
 
 
-_RESULT_SNIPPET_CHARS = 500
+# Tool results shown to the LLM judges (quality/depth/tool_use). A polymarket_search
+# returns ~4 KB for 8 markets, so a tight cap starved the judge of evidence and made it
+# flag genuinely-grounded suggestions (ids confirmed by the deterministic `grounding`=1.0)
+# as "invented". Keep enough that the judge sees what the agent actually saw.
+_RESULT_SNIPPET_CHARS = 6000
 
 
 def eval_tracing() -> AbstractContextManager:
