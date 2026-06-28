@@ -18,6 +18,8 @@ stops revising.
 
 from __future__ import annotations
 
+from collections.abc import AsyncIterator
+
 from langgraph.checkpoint.base import BaseCheckpointSaver
 from langgraph.graph import END, START, StateGraph
 from langgraph.types import RetryPolicy
@@ -27,6 +29,39 @@ from trader.core.agents.base import BaseAgent, silent_router
 from trader.core.models.domain import SkillResult
 from trader.core.models.protocols import Executor, Guard, Planner, Responder, Selector, Verifier
 from trader.core.models.schemas import AgentState, GuardVerdict, Messages, PlannerAction, ReviewVerdict
+from trader.core.models.streaming import ProgressEvent
+
+# Tool-call args worth surfacing as a status hint, in priority order. Ids/tokens are left
+# out on purpose — they are noise, not signal, for a human watching progress.
+_HINT_KEYS = ("query", "slug", "url", "expression", "thought")
+
+
+def _arg_hint(args: dict) -> str | None:
+    for key in _HINT_KEYS:
+        value = args.get(key)
+        if isinstance(value, str) and value.strip():
+            return value.strip()[:80]
+    return None
+
+
+def _status_for(node: str, update: dict) -> ProgressEvent | None:
+    """Map a node's state update to a progress event, or None for silent nodes."""
+    if node == "skills":
+        skill = update.get("skill")
+        return ProgressEvent(label=f"skill:{skill}") if skill else None
+    if node == "planner":
+        calls = getattr(update["messages"][-1], "tool_calls", None)
+        if not calls:
+            return None  # drafted an answer → the responder announces "synthesize" next
+        first, extra = calls[0], len(calls) - 1
+        hint = _arg_hint(first.get("args", {}))
+        detail = f"{hint} (+{extra})" if hint and extra else hint or (f"+{extra}" if extra else None)
+        return ProgressEvent(label=f"tool:{first['name']}", detail=detail)
+    if node == "responder":
+        return ProgressEvent(label="synthesize")
+    if node == "verifier" and update.get("review_verdict") == ReviewVerdict.REVISE:
+        return ProgressEvent(label="revise")
+    return None  # guard, executor, accepted verifier: nothing worth showing
 
 
 class ReActAgent(BaseAgent):
@@ -120,12 +155,34 @@ class ReActAgent(BaseAgent):
 
         return builder.compile(name=self.AGENT_NAME, checkpointer=self._checkpointer)
 
+    def _config(self, thread_id: str | None) -> dict:
+        return {
+            "recursion_limit": self._settings.agent_max_iterations * 6 + 10,
+            "configurable": {"thread_id": thread_id or "default"},
+        }
+
     async def invoke(self, messages: Messages, *, thread_id: str | None = None) -> SkillResult:
-        result = await self._graph.ainvoke(
-            {"messages": messages},
-            config={
-                "recursion_limit": self._settings.agent_max_iterations * 6 + 10,
-                "configurable": {"thread_id": thread_id or "default"},
-            },
-        )
+        result = await self._graph.ainvoke({"messages": messages}, config=self._config(thread_id))
         return result["result"]
+
+    async def astream(
+        self, messages: Messages, *, thread_id: str | None = None
+    ) -> AsyncIterator[ProgressEvent]:
+        """Stream per-node progress, then a terminal `final` event carrying the result.
+
+        Uses LangGraph's "updates" mode: each node's state delta becomes at most one status
+        event. The responder's delta holds the result; we keep the latest (the verifier may
+        send the loop back to revise) and emit it once the graph run completes.
+        """
+        result: SkillResult | None = None
+        async for chunk in self._graph.astream(
+            {"messages": messages}, config=self._config(thread_id), stream_mode="updates"
+        ):
+            for node, update in chunk.items():
+                if update and "result" in update:
+                    result = update["result"]
+                event = _status_for(node, update)
+                if event is not None:
+                    yield event
+        if result is not None:
+            yield ProgressEvent(kind="final", result=result)

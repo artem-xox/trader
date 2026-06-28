@@ -7,8 +7,10 @@ is forwarded to the agent HTTP app; the agent's answer is sent back to the chat.
 from __future__ import annotations
 
 import asyncio
+import json
 import logging
-from collections.abc import Awaitable, Callable
+import time
+from collections.abc import AsyncIterator, Awaitable, Callable
 from functools import wraps
 from typing import Any, TypeVar
 
@@ -47,6 +49,15 @@ def _thread_id(chat_id: int) -> str:
     return f"{chat_id}:{_chat_epoch.get(chat_id, 0)}"
 
 
+def _to_markdown_v2(markdown: str) -> str:
+    """Convert agent markdown to Telegram MarkdownV2.
+
+    `telegramify_markdown` reads `$…$` as LaTeX and renders the span monospace; our answers
+    carry plain dollar prices, so escape `$` to keep them literal text.
+    """
+    return telegramify_markdown.markdownify(markdown.replace("$", r"\$"))
+
+
 Handler = TypeVar("Handler", bound=Callable[..., Awaitable[Any]])
 
 
@@ -63,35 +74,59 @@ def allowlisted(handler: Handler) -> Handler:
     return wrapper  # type: ignore[return-value]
 
 
-async def _ask_agent(message: str, thread_id: str, *, debug: bool = False) -> tuple[str, str | None]:
-    url = f"{settings.agent_app_url}/agent/invoke"
+# Telegram throttles message edits; ~1/s stays clear of 429s while still feeling live.
+_MIN_EDIT_INTERVAL = 1.0
+
+
+async def _stream_agent(prompt: str, thread_id: str, *, debug: bool) -> AsyncIterator[dict[str, Any]]:
+    """Yield the agent's SSE progress events as dicts (status… then a terminal final/error)."""
+    url = f"{settings.agent_app_url}/agent/stream"
     headers = {"X-API-Key": settings.agent_api_key} if settings.agent_api_key else {}
-    payload = {"message": message, "thread_id": thread_id, "debug": debug}
-    async with httpx.AsyncClient(timeout=httpx.Timeout(120.0)) as client:
-        resp = await client.post(url, json=payload, headers=headers)
-        resp.raise_for_status()
-        data = resp.json()
-        return data["response"], data.get("trace_url")
+    payload = {"message": prompt, "thread_id": thread_id, "debug": debug}
+    async with httpx.AsyncClient(timeout=httpx.Timeout(300.0, connect=10.0)) as client:
+        async with client.stream("POST", url, json=payload, headers=headers) as resp:
+            resp.raise_for_status()
+            async for line in resp.aiter_lines():
+                if line.startswith("data:"):
+                    yield json.loads(line[5:].strip())
 
 
 async def _research_and_reply(message: Message, prompt: str) -> None:
-    """Send the prompt to the agent and reply with its formatted answer."""
+    """Stream the agent run, editing one status message live, then post the final answer."""
     debug = message.chat.id in _debug_chats
-    thinking = await message.answer(messages.THINKING)
+    status = await message.answer(messages.THINKING)
+    last_text, last_edit, final = messages.THINKING, 0.0, None
     try:
-        answer, trace_url = await _ask_agent(prompt, thread_id=_thread_id(message.chat.id), debug=debug)
+        async for event in _stream_agent(prompt, _thread_id(message.chat.id), debug=debug):
+            kind = event.get("kind")
+            if kind == "final":
+                final = event
+            elif kind == "error":
+                raise RuntimeError("agent stream returned an error")
+            elif kind == "status":
+                text = messages.status_line(event.get("label", ""), event.get("detail"))
+                now = time.monotonic()
+                if text != last_text and now - last_edit >= _MIN_EDIT_INTERVAL:
+                    try:
+                        await status.edit_text(text)
+                    except Exception:  # noqa: BLE001 - a failed status edit must not abort the run
+                        pass
+                    last_text, last_edit = text, now
     except Exception:  # noqa: BLE001 - surface a friendly error, log details
-        logger.exception("agent call failed")
-        await thinking.delete()
+        logger.exception("agent stream failed")
+        await status.delete()
         await message.answer(messages.RESEARCH_FAILED)
         return
-    await thinking.delete()
+    await status.delete()
+    if not final or not final.get("response"):
+        await message.answer(messages.RESEARCH_FAILED)
+        return
     await message.answer(
-        telegramify_markdown.markdownify(answer),
+        _to_markdown_v2(final["response"]),
         parse_mode=ParseMode.MARKDOWN_V2,
     )
-    if debug and trace_url:
-        await message.answer(messages.trace_link(trace_url), disable_web_page_preview=True)
+    if debug and final.get("trace_url"):
+        await message.answer(messages.trace_link(final["trace_url"]), disable_web_page_preview=True)
 
 
 @dp.message(Command("start", "help"))

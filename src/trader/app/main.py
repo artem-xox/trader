@@ -7,18 +7,19 @@ client) calls `POST /agent/invoke` to run the ReAct loop.
 from __future__ import annotations
 
 import logging
-from collections.abc import Callable
-from contextlib import asynccontextmanager
+from collections.abc import AsyncIterator, Callable
+from contextlib import asynccontextmanager, nullcontext
 
 from dotenv import load_dotenv
 from fastapi import Depends, FastAPI, HTTPException, Security, status
+from fastapi.responses import StreamingResponse
 from fastapi.security import APIKeyHeader
 from langchain_core.messages import HumanMessage
 from langchain_core.tracers.context import tracing_v2_enabled
 from langsmith import trace, tracing_context
 
 from trader.app.formatting import format_result
-from trader.app.schemas import InvokeRequest, InvokeResponse
+from trader.app.schemas import InvokeRequest, InvokeResponse, StreamEvent
 from trader.common.config import get_settings
 from trader.core.bootstrap import build_agent
 from trader.core.models.domain import SkillResult
@@ -95,3 +96,71 @@ async def invoke(req: InvokeRequest) -> InvokeResponse:
         response = format_result(result)
         run.add_outputs({"response": response})
     return InvokeResponse(response=response, result=result, trace_url=_safe_url(run.get_url))
+
+
+def _frame(event: StreamEvent) -> str:
+    return f"data: {event.model_dump_json(exclude_none=True)}\n\n"
+
+
+async def _emit(
+    agent: Agent,
+    messages: list[HumanMessage],
+    thread_id: str | None,
+    *,
+    get_url: Callable[[], str] | None = None,
+    run=None,
+    suppress: bool = False,
+) -> AsyncIterator[str]:
+    """Turn the agent's progress events into SSE frames; the `final` one carries the answer.
+
+    `suppress` mutes nested tracing (compressed mode); `run`/`get_url` attach the trace.
+    """
+    with tracing_context(enabled=False) if suppress else nullcontext():
+        async for event in agent.astream(messages, thread_id=thread_id):
+            if event.kind != "final":
+                yield _frame(StreamEvent(kind="status", label=event.label, detail=event.detail))
+                continue
+            response = format_result(event.result) if event.result is not None else ""
+            if run is not None:
+                run.add_outputs({"response": response})
+            yield _frame(
+                StreamEvent(
+                    kind="final",
+                    response=response,
+                    result=event.result,
+                    trace_url=_safe_url(get_url) if get_url is not None else None,
+                )
+            )
+
+
+async def _agent_sse(req: InvokeRequest) -> AsyncIterator[str]:
+    """Stream the agent run as SSE, mirroring /invoke's three tracing modes."""
+    agent: Agent = app.state.agent
+    settings = get_settings()
+    messages = [HumanMessage(req.message)]
+    try:
+        if not settings.langsmith_api_key:
+            async for frame in _emit(agent, messages, req.thread_id):
+                yield frame
+        elif req.debug:
+            with tracing_v2_enabled(project_name=settings.langsmith_project) as cb:
+                async for frame in _emit(agent, messages, req.thread_id, get_url=cb.get_run_url):
+                    yield frame
+        else:
+            with tracing_context(enabled=True), trace(
+                name="agent.stream",
+                project_name=settings.langsmith_project,
+                inputs={"message": req.message, "thread_id": req.thread_id},
+            ) as run:
+                async for frame in _emit(
+                    agent, messages, req.thread_id, get_url=run.get_url, run=run, suppress=True
+                ):
+                    yield frame
+    except Exception:  # noqa: BLE001 - surface a single error frame, log details
+        logger.exception("agent stream failed")
+        yield _frame(StreamEvent(kind="error"))
+
+
+@app.post("/agent/stream", dependencies=[Depends(_require_api_key)])
+async def stream(req: InvokeRequest) -> StreamingResponse:
+    return StreamingResponse(_agent_sse(req), media_type="text/event-stream")
