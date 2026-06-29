@@ -40,7 +40,9 @@ The custom ReAct-with-skills agent runs end-to-end locally and is deployed to Di
   built via a factory and injected at the composition root.
 - Two model tiers (strong planner / weak everything else).
 - Per-thread memory via a checkpointer (`InMemorySaver` for now).
-- FastAPI service (`/agent/invoke` with API-key auth, `/health`) + aiogram Telegram bot.
+- FastAPI service (`/agent/invoke`, `/agent/stream` with API-key auth, `/health`) + aiogram
+  Telegram bot. Live progress streams over SSE (semantic `ProgressEvent`s) and the bot edits
+  one message in place ("selected skill → searching → synthesizing") before the final answer.
 - Tests: offline (parsers, wiring) + LLM smoke (selection, structured output,
   anti-hallucination, tool use). Tracing to LangSmith.
 - Eval harness (`tests/eval/`, CLI): per-skill YAML datasets; evaluators `grounding`,
@@ -215,12 +217,10 @@ serves. *(Done: `ToolNode` now backs the executor; `RetryPolicy` wraps the LLM n
   checkpointer + `thread_id` plumbing this needs already exists, so no bespoke approval
   state machine — this is the natural mechanism for the Phase 5 "human-in-the-loop
   confirmation before any irreversible action" step. (See Phase 5+.)
-- **Streaming to Telegram — serves the UX open question, useful from Phase 1 on.** Replace
-  the single `invoke()` blob with `graph.astream(stream_mode="updates")` to push progress
+- **Streaming to Telegram — done.** `Agent.astream` drives `graph.astream` to push progress
   ("selected skill → searching markets → checking order book") during long `find`/`analyze`
-  loops, and `get_stream_writer()` (`stream_mode="custom"`) to emit custom status lines from
-  inside the planner. Resolves the "streaming partial results vs. one final message" open
-  question without a rewrite.
+  loops; the FastAPI `/agent/stream` endpoint relays it as SSE and the bot edits one message
+  in place. Resolved the "streaming partial results vs. one final message" open question.
 - **`Send` fan-out (map-reduce) — serves Phase 2/3.** When `distribute` allocates across N
   markets and `find` analyses several candidates, use LangGraph's `Send` to dispatch N
   parallel per-market sub-runs and fan the results back in, instead of a hand-rolled
@@ -251,7 +251,6 @@ Recorded now so they are not forgotten when trading is built:
 
 ## 7. Open questions
 
-- Streaming partial results to Telegram vs. a single final message.
 - Per-component model tiers vs. the current strong/weak split.
 - Whether `/find`'s information-flow term `I` warrants a lightweight anomaly/"tremor"
   signal, or stays a simple trade-count/order-imbalance heuristic for now.

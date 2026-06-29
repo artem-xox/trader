@@ -15,6 +15,10 @@ Today two skills are implemented, both read-only:
 Anything else is handled in **normal mode** (a plain assistant). Real order placement is
 intentionally out of scope for now.
 
+Long runs stream live progress to the chat ("selected `find` → searching markets →
+synthesizing…"), and every turn is traced to LangSmith for tracing, monitoring and
+evaluation.
+
 ## Quickstart
 
 ```bash
@@ -34,7 +38,18 @@ make test-llm    # LLM smoke tests (real model calls, needs OPENAI_API_KEY)
 make lint        # ruff
 ```
 
+## Evaluation
+
+A vendor-neutral eval harness (`tests/eval/`) scores each skill against versioned YAML
+datasets — `grounding`, `routing`, `tool_calls`, plus LLM-judge `quality`/`depth` — and
+records every run as a LangSmith experiment.
+
+```bash
+make eval               # all skills
+make eval SKILL=find    # one skill
+```
+
 ## Docs
 
-- [docs/DESIGN.md](docs/DESIGN.md) — architecture: the graph, the skills layer, components, models.
+- [docs/DESIGN.md](docs/DESIGN.md) — architecture: the graph, the skills layer, components, models, observability.
 - [docs/PLAN.md](docs/PLAN.md) — status, scope and roadmap.
