@@ -4,6 +4,13 @@ Runs once on the "answer" branch (the planner stopped requesting tools, or the i
 budget ran out). The active skill chooses the output schema and prompt; in normal mode a
 generic `GeneralAnswer` is produced. The emitted `AIMessage` carries the human-readable
 summary for the conversation history.
+
+In normal mode, if the planner already drafted a final answer (no tool calls pending),
+that draft *is* the answer — we skip the extra LLM call and reuse it directly instead of
+paying a second round trip just to re-wrap the same text into `GeneralAnswer`. The model
+is still called when a skill needs its structured schema synthesized, or when the
+iteration budget ran out before the planner drafted anything (the last message is then a
+tool result, not an answer).
 """
 
 from __future__ import annotations
@@ -40,6 +47,16 @@ class Responder:
 
     async def __call__(self, state: AgentState) -> ResponderResponse:
         skill = self._registry.get(state.get("skill"))
+        last = state["messages"][-1]
+
+        # Normal mode, and the planner already drafted the answer (no pending tool calls):
+        # that draft is the response verbatim, so retranslate it instead of re-asking the
+        # model to say the same thing again.
+        if skill is None and isinstance(last, AIMessage) and not last.tool_calls:
+            content = last.content if isinstance(last.content, str) else str(last.content)
+            result = self._default_schema(summary=content.strip() or "(no answer produced)")
+            return {"result": result, "messages": []}
+
         prompt = self._base_prompt if skill is None else skill.responder_prompt
         schema = self._default_schema if skill is None else skill.output_schema
 
