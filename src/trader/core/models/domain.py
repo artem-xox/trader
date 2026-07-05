@@ -12,6 +12,7 @@ human-readable assistant message regardless of which schema was used.
 from __future__ import annotations
 
 from enum import StrEnum
+from typing import Literal
 
 from pydantic import BaseModel, Field
 
@@ -59,6 +60,24 @@ class Suggestion(BaseModel):
     rationale: str = Field(description="Why this bet is interesting — the edge, in one or two lines.")
     confidence: Level = Field(description="Confidence in the rationale.")
     risk: RiskAssessment
+    # Tradability fields — copied verbatim from `polymarket_tradability` output, never
+    # estimated by the model. None when the tool was not called for this market.
+    spread_bps: float | None = Field(
+        default=None, description="Quoted spread in bps of mid, from polymarket_tradability."
+    )
+    depth_usd: float | None = Field(
+        default=None,
+        description="USD depth within 2 ticks of mid, from polymarket_tradability.",
+    )
+    find_score: float | None = Field(
+        default=None,
+        description="Composite tradability score (0-1), from polymarket_tradability.",
+    )
+    maker_or_taker: Literal["maker", "taker"] | None = Field(
+        default=None,
+        description="Execution preference, from polymarket_tradability: 'maker' (post "
+        "inside a wide spread) or 'taker' (crossing a tight spread is fine).",
+    )
 
 
 class ResearchResult(SkillResult):

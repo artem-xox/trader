@@ -10,9 +10,24 @@ import json
 
 import pytest
 
-from trader.core.clients import PolymarketClient, TavilyClient, parse_market
-from trader.core.clients.polymarket import parse_market_detail
-from trader.core.tools import build_tools
+from trader.core.clients import PolymarketClient, parse_market
+from trader.core.clients.polymarket import collect_markets, parse_market_detail
+from trader.core.tools import build_polymarket_tools
+
+
+def _raw_market(mid: str, closed: bool = False) -> dict:
+    return {
+        "id": mid,
+        "question": f"Q{mid}",
+        "slug": f"q-{mid}",
+        "active": not closed,
+        "closed": closed,
+        "outcomes": json.dumps(["Yes", "No"]),
+        "outcomePrices": json.dumps(["0.5", "0.5"]),
+        "volume": "100",
+        "liquidity": "50",
+        "endDate": "2026-12-01T00:00:00Z",
+    }
 
 
 def test_parse_market_normalizes_prices():
@@ -40,6 +55,51 @@ def test_parse_market_skips_closed():
     assert parse_market(raw, None) is None
 
 
+def test_parse_market_extracts_volume_24h():
+    raw = {**_raw_market("42"), "volume24hr": "2500.5"}
+    parsed = parse_market(raw, None)
+    assert parsed["volume_24h"] == 2500.5
+
+
+def test_parse_market_volume_24h_absent():
+    parsed = parse_market(_raw_market("43"), None)
+    assert parsed["volume_24h"] is None
+
+
+def test_collect_markets_caps_per_event():
+    """One busy event (many near-zero candidate markets) must not fill the whole list."""
+    events = [
+        {"slug": "busy", "markets": [_raw_market(f"a{i}") for i in range(10)]},
+        {"slug": "other", "markets": [_raw_market("b1")]},
+    ]
+    markets = collect_markets(events, limit=8)
+    from_busy = [m for m in markets if m["market_id"].startswith("a")]
+    assert len(from_busy) == 3  # _PER_EVENT_CAP
+    assert any(m["market_id"] == "b1" for m in markets)
+
+
+def test_collect_markets_respects_limit():
+    events = [{"slug": f"e{i}", "markets": [_raw_market(f"m{i}")]} for i in range(10)]
+    assert len(collect_markets(events, limit=4)) == 4
+
+
+def test_collect_markets_skips_closed_within_cap():
+    """Closed markets don't consume the per-event cap."""
+    events = [
+        {
+            "slug": "mixed",
+            "markets": [
+                _raw_market("dead1", closed=True),
+                _raw_market("dead2", closed=True),
+                _raw_market("live1"),
+                _raw_market("live2"),
+            ],
+        }
+    ]
+    ids = [m["market_id"] for m in collect_markets(events, limit=8)]
+    assert ids == ["live1", "live2"]
+
+
 def test_parse_market_detail_keeps_closed_and_description():
     raw = {
         "id": "9",
@@ -65,8 +125,8 @@ def test_parse_market_detail_keeps_closed_and_description():
 @pytest.mark.live
 @pytest.mark.asyncio
 async def test_polymarket_search_live():
-    polymarket_search, *_ = build_tools(PolymarketClient(), TavilyClient(api_key="dummy"))
-    out = await polymarket_search.ainvoke({"query": "bitcoin", "limit": 2})
+    tools = build_polymarket_tools(PolymarketClient())
+    out = await tools.search.ainvoke({"query": "bitcoin", "limit": 2})
     assert isinstance(out, str)
     assert "market_id" in out or "No active" in out
 

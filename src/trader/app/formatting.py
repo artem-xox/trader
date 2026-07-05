@@ -6,7 +6,14 @@ turns it into its own dialect (the Telegram bot runs it through `telegramify_mar
 
 from __future__ import annotations
 
-from trader.core.models.domain import Level, MarketAnalysis, ResearchResult, SkillResult, Stance
+from trader.core.models.domain import (
+    Level,
+    MarketAnalysis,
+    ResearchResult,
+    SkillResult,
+    Stance,
+    Suggestion,
+)
 
 # Directional call → (emoji, label). Risk/confidence reuse a shared traffic-light scale.
 _STANCE = {
@@ -66,9 +73,25 @@ def _format_research(r: ResearchResult) -> str:
             f"**{i}. {_link(s.question, s.url)}**",
             f"💰 implied {_pct(s.implied_probability)} · 🎯 confidence {s.confidence} "
             f"· {_LIGHT.get(s.risk.level, '⚠️')} risk {s.risk.level}",
-            s.rationale,
         ]
+        if trade := _tradability_line(s):
+            lines.append(trade)
+        lines.append(s.rationale)
         if s.risk.note:
             lines.append(f"_{s.risk.note}_")
         blocks.append("\n".join(lines))
     return "\n\n".join(blocks)
+
+
+def _tradability_line(s: Suggestion) -> str | None:
+    """One line of execution metrics, only for fields the tradability tool filled."""
+    parts = []
+    if s.find_score is not None:
+        parts.append(f"🧮 score {s.find_score:.2f}")
+    if s.spread_bps is not None:
+        parts.append(f"↔️ spread {s.spread_bps:.0f} bps")
+    if s.depth_usd is not None:
+        parts.append(f"🏊 depth ${s.depth_usd:,.0f}")
+    if s.maker_or_taker:
+        parts.append(f"🛠 {s.maker_or_taker}")
+    return " · ".join(parts) if parts else None

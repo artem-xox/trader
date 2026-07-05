@@ -65,8 +65,8 @@ def analyze_skill(
     polymarket_market: BaseTool,
     polymarket_search: BaseTool,
     polymarket_orderbook: BaseTool,
-    web_search: BaseTool,
 ) -> Skill:
+    # web_search arrives with the general tools appended to every skill by the registry.
     return Skill(
         name="analyze",
         triggers=("analyze",),
@@ -75,5 +75,5 @@ def analyze_skill(
         guard_prompt=_GUARD_PROMPT,
         responder_prompt=_RESPONDER_PROMPT,
         output_schema=MarketAnalysis,
-        tools=(polymarket_market, polymarket_search, polymarket_orderbook, web_search),
+        tools=(polymarket_market, polymarket_search, polymarket_orderbook),
     )

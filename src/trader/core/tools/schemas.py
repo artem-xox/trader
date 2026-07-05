@@ -7,9 +7,11 @@ from pydantic import BaseModel, Field
 
 class PolymarketSearchInput(BaseModel):
     query: str = Field(
+        default="",
         description="Topic or keyword to search active Polymarket prediction markets for. "
         "With `tag` set, use the distinctive event name (e.g. 'Austrian Grand Prix', "
-        "'Algeria vs Austria').",
+        "'Algeria vs Austria'). Leave EMPTY to browse the highest-volume active markets "
+        "(trending) — the right move for abstract asks with no obvious keyword.",
     )
     limit: int = Field(
         default=8,
@@ -62,6 +64,37 @@ class OrderbookInput(BaseModel):
     token_id: str = Field(
         description="CLOB token id for the YES or NO side of a Polymarket market. "
         "Available as the first element of `clob_token_ids` in the market data.",
+    )
+
+
+class TradabilityInput(BaseModel):
+    token_id: str = Field(
+        description="CLOB token id of the market's YES side — the first element of "
+        "`clob_token_ids` in the market data from polymarket_search/polymarket_market.",
+    )
+    market_id: str | None = Field(
+        default=None,
+        description="The market's `market_id` from the same market data (NOT the token "
+        "id). Echoed back in the result so the verdict stays attached to its market.",
+    )
+    fair_probability: float | None = Field(
+        default=None,
+        ge=0.0,
+        le=1.0,
+        description="Your own evidence-based estimate of the true YES probability (0-1). "
+        "Provide it whenever you have one — without it the net-edge component of the "
+        "score is skipped.",
+    )
+    ends_at: str | None = Field(
+        default=None,
+        description="The market's end date (`ends_at` from the market data, ISO 8601). "
+        "Enables the time-to-resolution component of the score.",
+    )
+    volume_24h_usd: float | None = Field(
+        default=None,
+        ge=0.0,
+        description="The market's 24h traded volume in USD (`volume_24h` from the market "
+        "data). Enables the information-flow component of the score.",
     )
 
 
