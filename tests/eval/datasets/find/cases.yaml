@@ -90,3 +90,17 @@
 - id: bitcoin-intent
   input: "Какие сейчас есть интересные ставки на биткойн?"
   source: handcrafted
+
+# --- Abstract topics (no obvious keyword): exercise the trending browse mode and the
+# tradability gate. The agent must cast wide across themes, not answer from one search.
+- id: undervalued-abstract
+  input: "/find the most undervalued markets on Polymarket right now"
+  source: handcrafted
+
+- id: whats-hot-intent
+  input: "What's hot on Polymarket right now? Anything actually worth betting on?"
+  source: handcrafted
+
+- id: promising-abstract-ru
+  input: "/find самые многообещающие ставки прямо сейчас"
+  source: handcrafted

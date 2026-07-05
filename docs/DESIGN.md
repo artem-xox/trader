@@ -11,8 +11,9 @@ ReAct agent with a skills layer**. This document describes how it works today; s
 ```
 Telegram (aiogram)  ──HTTP──▶  FastAPI service  ──▶  ReAct agent (LangGraph)
                                                          │
-                                          tools ◀────────┤   web_search (Tavily)
+                                          tools ◀────────┤   web_search / web_fetch (Tavily)
                                                          │   polymarket_search / _market (Gamma API)
+                                                         │   polymarket_orderbook / _tradability (CLOB API)
                                           checkpointer ◀──┘   (per-thread memory)
 ```
 
@@ -84,11 +85,14 @@ name back to a `Skill` via the shared registry.
 **Normal mode** is first-class: when no skill is chosen, the nodes fall back to base
 prompts, base tools (`web_search`), and the `GeneralAnswer` schema.
 
-Implemented skills (`core/skills/`):
+Implemented skills (`core/skills/`); every skill also receives the general tools
+(web search/fetch, calculator, current time, think) from the registry:
 
-- **`find`** — research a topic. Tools: `polymarket_search`, `web_search`. Output: `ResearchResult`.
+- **`find`** — research a topic (or an abstract ask like "most undervalued") and rank a
+  tradable shortlist. Tools: `polymarket_search`, `polymarket_tradability`. Output:
+  `ResearchResult`.
 - **`analyze`** — deep dive on one market given its URL. Tools: `polymarket_market`,
-  `polymarket_search`, `web_search`. Output: `MarketAnalysis`.
+  `polymarket_search`, `polymarket_orderbook`. Output: `MarketAnalysis`.
 
 Adding a skill = one module (prompts + schema + tools) registered in `skills/__init__.py`.
 No graph or component changes.
@@ -103,7 +107,9 @@ skill's schema via `with_structured_output`, so callers consume structure, not p
 
 - `SkillResult` (base) — guarantees a `summary`. Also exposes `referenced_market_ids()`.
 - `GeneralAnswer` — normal mode: just the summary.
-- `ResearchResult` — `find`: a ranked list of `Suggestion`s, each with a `RiskAssessment`.
+- `ResearchResult` — `find`: a ranked list of `Suggestion`s, each with a `RiskAssessment`
+  and execution metrics (`spread_bps`, `depth_usd`, `find_score`, `maker_or_taker`)
+  copied from the tradability tool.
 - `MarketAnalysis` — `analyze`: implied vs. fair probability, edge, stance
   (lean_yes/lean_no/pass), confidence, key factors, and a `RiskAssessment`.
 
@@ -117,16 +123,31 @@ verifier.
 
 ## 5. Tools & clients
 
-Tools are built by a factory (`core/tools`) and injected at the composition root — no
-import-time side effects. Each returns a compact JSON string; prices are normalized to
-implied probabilities in the client layer so the model reasons in one unit.
+Tools are built by two factories in `core/tools` and injected at the composition root —
+no import-time side effects. Each returns a compact JSON string; prices are normalized
+to implied probabilities in the client layer so the model reasons in one unit.
 
-- `polymarket_search(query, limit)` — Gamma `public-search`, active markets.
-- `polymarket_market(slug)` — Gamma `/markets?slug=` then `/events?slug=`; full detail for
-  one market incl. resolution criteria. Accepts a market slug, an event slug, or a full URL.
-- `web_search(query, max_results)` — Tavily, news/context for edge assessment.
+**Polymarket tools** (`build_polymarket_tools` → `PolymarketTools`, named access — no
+positional unpacking in wiring code):
 
-Clients live in `core/clients/{polymarket,tavily}` and are pure HTTP wrappers.
+- `search(query, limit, tag)` — Gamma `public-search`, active markets; empty query =
+  trending browse (top-volume events); `tag` = category browse for per-event sports
+  markets; ≤ 3 markets per event for diversity.
+- `market(slug)` — Gamma `/markets?slug=` then `/events?slug=`; full detail for one
+  market incl. resolution criteria. Accepts a market slug, an event slug, or a full URL.
+- `orderbook(token_id)` — CLOB book snapshot: spread_bps, depth, realised vol, top levels.
+- `tradability(token_id, market_id, fair_probability, ends_at, volume_24h_usd)` — hard
+  filters + composite find score over the live book (`core/trading/scoring.py`).
+
+**General tools** (`build_general_tools`, available to every skill and normal mode):
+`web_search` / `web_fetch` (Tavily), `current_datetime`, `calculator`, `think`.
+
+Clients live in `core/clients/{polymarket,clob,tavily}`. Gamma and CLOB share the
+`BaseHttpClient` transport (`core/clients/base.py`); Gamma's wire-format quirks
+(JSON-encoded list fields, string numerics) are absorbed by pydantic request/response
+models in `core/clients/polymarket/models.py`, so the client class only picks endpoints
+and serialises results. Deterministic trading math (tradability score, hard filters)
+lives in `core/trading/` — pure functions, no network, no LLM.
 
 ---
 
@@ -264,6 +285,7 @@ src/trader/
     ├── components/         # graph nodes: selector, planner, guard, executor, responder, verifier
     ├── models/             # domain.py (output schemas), schemas.py (state), protocols.py, streaming.py (progress events)
     ├── skills/             # base.py (Skill + registry), find.py, analyze.py
-    ├── tools/              # build_tools factory + input schemas
-    └── clients/            # polymarket (Gamma), tavily
+    ├── tools/              # polymarket.py + general.py factories, input schemas
+    ├── trading/            # scoring.py — tradability score + hard filters (pure)
+    └── clients/            # base.py (shared HTTP), polymarket (Gamma + models), clob, tavily
 ```

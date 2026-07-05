@@ -72,6 +72,48 @@ def test_research_lists_numbered_bold_links_with_risk_light():
     assert "_risky_" in out
 
 
+def test_research_shows_tradability_line_when_present():
+    r = ResearchResult(
+        summary="one idea",
+        suggestions=[
+            Suggestion(
+                market_id="1",
+                question="A?",
+                implied_probability=0.3,
+                rationale="why a",
+                confidence=Level.LOW,
+                risk=RiskAssessment(level=Level.LOW, factors=[], note=""),
+                spread_bps=85.0,
+                depth_usd=3400.0,
+                find_score=0.62,
+                maker_or_taker="taker",
+            )
+        ],
+    )
+    out = format_result(r)
+    assert "🧮 score 0.62" in out
+    assert "↔️ spread 85 bps" in out
+    assert "🏊 depth $3,400" in out
+    assert "🛠 taker" in out
+
+
+def test_research_omits_tradability_line_when_absent():
+    r = ResearchResult(
+        summary="one idea",
+        suggestions=[
+            Suggestion(
+                market_id="1",
+                question="A?",
+                implied_probability=0.3,
+                rationale="why a",
+                confidence=Level.LOW,
+                risk=RiskAssessment(level=Level.LOW, factors=[], note=""),
+            )
+        ],
+    )
+    assert "🧮" not in format_result(r)
+
+
 def test_dollar_prices_survive_telegram_conversion():
     # Regression: telegramify reads `$…$` as LaTeX and renders the span monospace; the bot
     # escapes `$` so prices stay literal text and never collapse into a code span.

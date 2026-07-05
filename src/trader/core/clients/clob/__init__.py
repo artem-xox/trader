@@ -18,8 +18,9 @@ from typing import NamedTuple
 
 import httpx
 
+from trader.core.clients.base import BaseHttpClient
+
 CLOB_BASE_URL = "https://clob.polymarket.com"
-_TIMEOUT = httpx.Timeout(15.0)
 
 
 # ---------------------------------------------------------------------------
@@ -176,35 +177,23 @@ def slippage_from_book(book: OrderBook, size_usd: float, side: str = "buy") -> f
 # ---------------------------------------------------------------------------
 
 
-class ClobClient:
-    def __init__(
-        self,
-        base_url: str = CLOB_BASE_URL,
-        timeout: httpx.Timeout = _TIMEOUT,
-    ) -> None:
-        self._base_url = base_url
-        self._timeout = timeout
+class ClobClient(BaseHttpClient):
+    def __init__(self, base_url: str = CLOB_BASE_URL) -> None:
+        super().__init__(base_url)
 
     async def book(self, token_id: str) -> OrderBook:
         """Fetch and parse the full order book for a token."""
-        async with httpx.AsyncClient(timeout=self._timeout) as client:
-            resp = await client.get(f"{self._base_url}/book", params={"token_id": token_id})
-            resp.raise_for_status()
-        return parse_book(resp.json())
+        return parse_book(await self._get_json("/book", {"token_id": token_id}))
 
     async def midpoint(self, token_id: str) -> float | None:
         """Fetch the midpoint price for a token."""
-        async with httpx.AsyncClient(timeout=self._timeout) as client:
-            resp = await client.get(f"{self._base_url}/midpoint", params={"token_id": token_id})
-            resp.raise_for_status()
-        return _float(resp.json().get("mid"))
+        data = await self._get_json("/midpoint", {"token_id": token_id})
+        return _float(data.get("mid"))
 
     async def spread(self, token_id: str) -> float | None:
         """Fetch the quoted spread for a token."""
-        async with httpx.AsyncClient(timeout=self._timeout) as client:
-            resp = await client.get(f"{self._base_url}/spread", params={"token_id": token_id})
-            resp.raise_for_status()
-        return _float(resp.json().get("spread"))
+        data = await self._get_json("/spread", {"token_id": token_id})
+        return _float(data.get("spread"))
 
     async def prices_history(
         self,
@@ -213,13 +202,11 @@ class ClobClient:
         fidelity: int = 60,
     ) -> list[tuple[int, float]]:
         """Fetch price history. interval: 1m | 1h | 1d | 1w | 1mo | max."""
-        async with httpx.AsyncClient(timeout=self._timeout) as client:
-            resp = await client.get(
-                f"{self._base_url}/prices-history",
-                params={"market": token_id, "interval": interval, "fidelity": fidelity},
-            )
-            resp.raise_for_status()
-        return parse_history(resp.json())
+        data = await self._get_json(
+            "/prices-history",
+            {"market": token_id, "interval": interval, "fidelity": fidelity},
+        )
+        return parse_history(data)
 
     async def orderbook_snapshot(self, token_id: str) -> dict:
         """Fetch all CLOB data for a token and return a compact summary dict.

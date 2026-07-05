@@ -25,7 +25,7 @@ from trader.core.components.selector import Selector
 from trader.core.components.verifier import Verifier
 from trader.core.models.protocols import Agent
 from trader.core.skills import build_registry
-from trader.core.tools import build_tools
+from trader.core.tools import build_general_tools, build_polymarket_tools
 
 
 def get_model(model: str, settings: Settings, *, temperature: float = 0.4) -> BaseChatModel:
@@ -41,18 +41,14 @@ def build_agent(
     strong = get_model(settings.openai_model_strong, settings)  # planner
     weak = get_model(settings.openai_model_weak, settings)  # everything else
 
-    polymarket_search, polymarket_market, polymarket_orderbook, web_search, *general = build_tools(
-        PolymarketClient(),
-        TavilyClient(api_key=settings.tavily_api_key),
-        ClobClient(),
-    )
-    # general = [current_datetime, calculator, web_fetch, think] — read-only helpers
+    polymarket_tools = build_polymarket_tools(PolymarketClient(), ClobClient())
+    # web_search, web_fetch, current_datetime, calculator, think — read-only helpers
     # available everywhere (every skill and normal mode).
-    registry = build_registry(
-        polymarket_search, polymarket_market, polymarket_orderbook, web_search, general
-    )
-    all_tools = [polymarket_search, polymarket_market, polymarket_orderbook, web_search, *general]
-    base_tools = [web_search, *general]  # normal mode: web research + general helpers
+    general_tools = build_general_tools(TavilyClient(api_key=settings.tavily_api_key))
+
+    registry = build_registry(polymarket_tools, general_tools)
+    all_tools = [*polymarket_tools.as_list(), *general_tools]
+    base_tools = general_tools  # normal mode: web research + general helpers
 
     # In-memory for now; swap for langgraph-checkpoint-postgres' PostgresSaver in prod.
     checkpointer = checkpointer or InMemorySaver()

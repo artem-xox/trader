@@ -35,9 +35,18 @@ The custom ReAct-with-skills agent runs end-to-end locally and is deployed to Di
   a fair-value + risk model).
 - Structured output per skill (`ResearchResult`, `MarketAnalysis`, `GeneralAnswer`) with an
   anti-hallucination verifier (every referenced market id must come from tool output).
-- Tools: `polymarket_search`, `polymarket_market` (Gamma API, read-only), `web_search`
-  (Tavily), plus general read-only helpers (`calculator`, `current_datetime`, `web_fetch`),
-  built via a factory and injected at the composition root.
+- Tools, split by domain (`core/tools/polymarket.py` + `core/tools/general.py`, injected
+  at the composition root): `polymarket_search`, `polymarket_market` (Gamma, read-only),
+  `polymarket_orderbook`, `polymarket_tradability` (CLOB REST, read-only) with named
+  access via a `PolymarketTools` dataclass; general read-only helpers (`web_search`,
+  `web_fetch`, `calculator`, `current_datetime`, `think`) available everywhere.
+- Typed HTTP clients: shared `BaseHttpClient` transport; Gamma wire format absorbed by
+  pydantic request/response models (`core/clients/polymarket/models.py`). Deterministic
+  trading math (tradability score, hard filters) in `core/trading/` — pure and unit-tested.
+- CLOB read-only data client (Phase 0): `core/clients/clob/` over `/book`, `/midpoint`,
+  `/spread`, `/prices-history`; derived `spread_bps` / `depth_within_2_ticks` /
+  `realised_vol` / book-walk slippage; `clobTokenIds` wired through `parse_market`.
+  Offline fixture tests + `-m live` tests against a liquid market.
 - Two model tiers (strong planner / weak everything else).
 - Per-thread memory via a checkpointer (`InMemorySaver` for now).
 - FastAPI service (`/agent/invoke`, `/agent/stream` with API-key auth, `/health`) + aiogram
@@ -99,10 +108,10 @@ other two). All phases are read-only; trading is Phase 5 and is not built until 
 
 Each phase states its **success criteria** so the work can loop to "done" independently.
 
-### Phase 0 — CLOB read-only data client *(foundation)*
+### Phase 0 — CLOB read-only data client *(foundation)* — ✅ done
 
-The prerequisite for everything else: pull live price-formation data, not just Gamma's
-editorial/venue metadata.
+Landed in PR #4. The prerequisite for everything else: pull live price-formation data,
+not just Gamma's editorial/venue metadata.
 
 - New `core/clients/clob/` — a pure HTTP wrapper over CLOB REST (base
   `https://clob.polymarket.com`): `/book`, `/midpoint`, `/spread`, `/prices-history`.
@@ -144,20 +153,27 @@ the shared core for `find` and `distribute`.
   - a deterministic evaluator checks EV arithmetic is internally consistent (EV equals
     `q̂ − all_in_cost` within tolerance).
 
-### Phase 2 — tradability `/find`
+### Phase 2 — tradability `/find` — ✅ done
 
 Rank by **tradability + net edge**, not narrative appeal.
 
 - Composite score `S = 0.30·L + 0.25·E + 0.15·V + 0.20·I + 0.10·T`
   (liquidity quality, net edge after cost, realised volatility, information-flow intensity,
-  time-to-resolution fit), built on the Phase 0 CLOB metrics.
-- **Hard filters applied before scoring:** spread wider than max; top-of-book depth below a
-  multiple of intended size; stale book timestamp; geoblocked; sports market too close to
-  start. Rejected markets are summarised by reason, not silently dropped.
-- Extend `Suggestion` with `spread_bps`, `depth_usd`, `find_score`,
-  `maker_or_taker_preference`.
-- **Success criteria:** eval case "loud but untradeable" (wide spread / thin depth) is
-  filtered out, not ranked top; a genuinely tradable market with modest narrative beats it.
+  time-to-resolution fit), built on the Phase 0 CLOB metrics — pure functions in
+  `core/scoring.py`, weights renormalised over available components.
+- **Hard filters applied before scoring** (in `scoring.tradability`): spread > 600 bps;
+  depth within 2 ticks < $500; extreme price (mid outside 2–98%); stale book (> 5 min).
+  Rejected markets carry `reject_reasons` and the responder summarises notable rejects.
+  *(Geoblock and sports-start-time filters deferred — no data source for them yet.)*
+- New `polymarket_tradability` tool (order-book snapshot + score in one call, echoes
+  `market_id` so verdicts stay attached to their market); `Suggestion` extended with
+  `spread_bps`, `depth_usd`, `find_score`, `maker_or_taker`; Telegram shows an execution
+  line per suggestion.
+- Search upgrades for broad/abstract asks: empty query = trending browse (top-volume
+  active events), ≤ 3 markets per event for diversity, `volume_24h` in market data.
+- **Result:** find eval quality 0.59 → **0.68** (grounding 1.0, routing 1.0) on the
+  extended dataset (23 cases incl. abstract "undervalued/most promising") against a
+  stricter rubric that penalises untradeable picks, longshot spam, and near-duplicates.
 
 ### Phase 3 — new `/distribute` skill
 
@@ -199,8 +215,11 @@ taken now:** market-making / Avellaneda–Stoikov, naïve spread capture.
 
 ### Independent of phases
 
-- **Persistence.** Swap `InMemorySaver` → `PostgresSaver`; add a `runs` audit table.
-- **Eval breadth.** More cases, a `normal` dataset, CI gate on `grounding == 1.0`.
+- **Persistence** *(deferred until productionisation)*. Swap `InMemorySaver` →
+  `PostgresSaver`; add a `runs` audit table. Not needed while the agent is a
+  research prototype — revisit when hardening for production.
+- **Eval breadth.** More cases, ~~a `normal` dataset~~ *(done — `tests/eval/datasets/normal`)*,
+  CI gate on `grounding == 1.0`.
 - **Skill ergonomics.** Optionally move "what to verify / how to format" onto the `Skill`
   so the verifier and formatter stop knowing about concrete schemas.
 
