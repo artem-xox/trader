@@ -87,6 +87,12 @@ class Settings(BaseSettings):
         description="Shared secret for X-API-Key header; empty = no auth (dev only)",
     )
 
+    # --- Persistence ---
+    # Postgres for the web client's transcripts and the agent's checkpoints. Empty
+    # falls back to in-process memory, which is what tests, the eval harness and a
+    # local `make app` without a database run on (see app/main.py's lifespan).
+    database_url: str = Field(default="", description="Postgres DSN; empty = in-memory")
+
     # --- Web UI ---
     # Where the built SPA lives, relative to the working directory. The app serves it
     # when the directory exists and runs API-only when it does not (see app/main.py).

@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
-from typing import Literal
+from datetime import datetime
+from typing import Any, Literal
+from uuid import UUID
 
 from pydantic import BaseModel, Field, SerializeAsAny
 
@@ -43,3 +45,40 @@ class StreamEvent(BaseModel):
     response: str | None = Field(default=None, description="Human-readable markdown answer (final)")
     result: SerializeAsAny[SkillResult] | None = Field(default=None, description="Structured result")
     trace_url: str | None = Field(default=None, description="LangSmith trace URL (final, debug mode)")
+
+
+# ---------------------------------------------------------------------------
+# Web client: conversations and their transcripts (docs/WEB.md §5.1)
+# ---------------------------------------------------------------------------
+
+
+class Conversation(BaseModel):
+    id: UUID
+    title: str
+    created_at: datetime
+    updated_at: datetime
+    message_count: int = 0
+
+
+class Message(BaseModel):
+    id: int
+    role: Literal["user", "assistant"]
+    content: str = Field(description="User text, or the assistant's markdown answer")
+    # Stored as jsonb and returned as-is: the browser renders market cards from it, and
+    # re-validating into a SkillResult subtype here would buy nothing.
+    result: dict[str, Any] | None = Field(default=None, description="Structured result")
+    trace_url: str | None = None
+    created_at: datetime
+
+
+class ConversationDetail(Conversation):
+    messages: list[Message] = Field(default_factory=list)
+
+
+class TitleUpdate(BaseModel):
+    title: str = Field(min_length=1, max_length=200)
+
+
+class TurnRequest(BaseModel):
+    message: str = Field(..., min_length=1, description="What the user typed")
+    debug: bool = Field(default=False, description="Attach a LangSmith trace URL to the answer")
