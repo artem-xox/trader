@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+
+    <!--
+      Served by FastAPI, which could set these as real headers — but keeping the
+      policy in the document means it travels with the build and cannot drift
+      from it. `frame-ancestors` and X-Content-Type-Options have no meta
+      equivalent; they belong in response headers if this ever needs them.
+      `connect-src 'self'` is enough because the API shares the origin.
+    -->
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; font-src 'self'; connect-src 'self'; base-uri 'none'; form-action 'none'; object-src 'none'"
+    />
+    <meta name="referrer" content="strict-origin-when-cross-origin" />
+    <meta name="robots" content="noindex, nofollow" />
+
+    <title>AI Trader</title>
+    <meta name="theme-color" content="#0b0f14" />
+    <link rel="icon" href="data:," />
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

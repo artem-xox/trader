@@ -1,4 +1,4 @@
-.PHONY: install app bot test lint fmt eval
+.PHONY: install app bot web web-build test lint fmt eval
 
 install:
 	uv sync
@@ -6,6 +6,15 @@ install:
 # Run the FastAPI agent app (serves the agent over HTTP)
 app:
 	uv run uvicorn trader.app.main:app --reload --port 8000
+
+# Run the web client in dev mode (:5173, proxies /api and /agent to the app on :8000).
+web:
+	npm --prefix web install && npm --prefix web run dev
+
+# Build the web client into web/dist, which `make app` then serves itself —
+# the same layout the image ships.
+web-build:
+	npm --prefix web install && npm --prefix web run build
 
 # Run the Telegram bot (long-polling). Requires the app to be running.
 bot:

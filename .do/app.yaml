@@ -5,15 +5,37 @@
 #   - telegram : worker running the aiogram bot via long-polling; it calls the agent
 #                over the internal network (${agent.PRIVATE_URL}).
 #
-# Deploy:
-#   doctl apps create --spec .do/app.yaml          # first time
-#   doctl apps update <APP_ID> --spec .do/app.yaml # subsequent changes
+# The agent service also serves the web client (docs/WEB.md): the SPA is built into
+# the image and mounted by FastAPI, so there is no static-site component and no
+# ingress rules — one component answers `/`, `/api/*` and `/agent/*`.
+#
+# Deploy: .github/workflows/python-app.yml applies this spec after tests pass. Both
+# components set `deploy_on_push: false`, so DigitalOcean's own webhook never deploys
+# in parallel with CI — the copy farkle learned the hard way, where every push to main
+# deployed twice and the first of the two was ungated by tests.
+#
+# Manual fallback:
+#   doctl apps update <APP_ID> --spec .do/app.yaml
 #
 # SECRET values below are placeholders — set the real values in the DO dashboard
 # (App → Settings → component → Environment Variables) or via `doctl`. Do NOT commit
 # real secrets here.
 name: ai-trader
 region: fra
+
+domains:
+# Depends on a CNAME that must already exist in Cloudflare before this block is
+# applied:
+#   trader.iamxox.space  CNAME  <app>.ondigitalocean.app  (DNS only / grey cloud)
+# Order matters: DigitalOcean verifies the record before it will issue a certificate,
+# so adding the domain first only parks it in verification and fires DOMAIN_FAILED.
+# The record must also stay unproxied — behind Cloudflare's proxy the CA's HTTP
+# validation reaches Cloudflare rather than App Platform and never completes. Leaving
+# it grey also keeps Cloudflare out of the SSE path.
+- domain: trader.iamxox.space
+  type: PRIMARY
+  # No `zone`: that field is for domains whose nameservers DigitalOcean runs, and
+  # these are Cloudflare's.
 
 services:
   - name: agent
@@ -22,7 +44,7 @@ services:
     github:
       repo: artem-xox/trader
       branch: main
-      deploy_on_push: true
+      deploy_on_push: false
     instance_count: 1
     instance_size_slug: basic-xs
     http_port: 8080
@@ -70,7 +92,7 @@ workers:
     github:
       repo: artem-xox/trader
       branch: main
-      deploy_on_push: true
+      deploy_on_push: false
     instance_count: 1
     instance_size_slug: basic-xxs
     run_command: uv run python -m trader.ui.telegram.main

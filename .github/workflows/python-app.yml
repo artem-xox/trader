@@ -32,3 +32,104 @@ jobs:
 
       - name: Unit tests
         run: uv run pytest -q tests/unit
+
+  web:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: web/.node-version
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+
+      - run: npm ci
+        working-directory: web
+
+      - run: npm run typecheck
+        working-directory: web
+
+      # The image runs this same build; failing here keeps a broken frontend out
+      # of a Docker build that takes minutes to discover the same thing.
+      - run: npm run build
+        working-directory: web
+
+  deploy:
+    name: Deploy to DigitalOcean
+    needs: [test, web]
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    # Two deploys at once race for the same app. Queue rather than cancel: a
+    # half-applied spec is worse than waiting.
+    concurrency:
+      group: deploy-prod
+      cancel-in-progress: false
+    permissions:
+      contents: read
+
+    steps:
+      - uses: actions/checkout@v4
+
+      # `app_spec_location` and `app_name` are mutually exclusive, and picking the
+      # wrong one inverts what deploys: given `app_name`, the action pulls the spec
+      # off the *live app* and the in-repository spec is ignored entirely. Point at
+      # the file.
+      - name: Deploy app spec
+        id: deploy
+        uses: digitalocean/app_action/deploy@v2
+        with:
+          token: ${{ secrets.DIGITALOCEAN_ACCESS_TOKEN }}
+          app_spec_location: .do/app.yaml
+          print_build_logs: true
+
+      # The action reports success once DigitalOcean says the deployment is ACTIVE,
+      # which is not the same as the app answering. Check the app's own live URL
+      # rather than the custom domain, so this keeps working if the domain moves.
+      #
+      # The app JSON travels through the environment, not through `${{ }}` inside the
+      # script: interpolating it directly would splice an API response into a shell
+      # command.
+      - name: Smoke check
+        env:
+          APP: ${{ steps.deploy.outputs.app }}
+        run: |
+          # ACTIVE precedes the edge actually serving the new build, so the
+          # assertion retries rather than the request — curl's own --retry covers
+          # transport errors and 5xx, never a 200 whose body is stale.
+          retry() {
+            local what=$1; shift
+            local attempt
+            for attempt in $(seq 1 12); do
+              if "$@"; then
+                if [ "$attempt" -gt 1 ]; then
+                  echo "$what: settled after $attempt attempts"
+                fi
+                return 0
+              fi
+              echo "$what: not ready yet (attempt $attempt)"
+              sleep 5
+            done
+            echo "$what: still wrong after 12 attempts"
+            return 1
+          }
+
+          # `//` only falls through on null, and the action leaves live_url as an
+          # empty string when the app has no ingress yet, so filter by value.
+          url=$(jq -er '[.live_url, .default_ingress]
+                        | map(select(. != null and . != "")) | first' <<<"$APP")
+
+          # Three things, because they fail independently: the agent process is up,
+          # the API answers on the path the browser uses, and FastAPI is serving the
+          # SPA rather than 404ing because the image shipped without a web build.
+          serving() {
+            local base=${1%/}
+            curl --fail --silent --location "$base/health" | grep -q '"ok"' || return 1
+            curl --fail --silent --location "$base/api/health" | grep -q '"ok"' || return 1
+            curl --fail --silent --location "$base" | grep -q '<div id="root">'
+          }
+
+          echo "Checking $url"
+          retry "$url" serving "$url"
+          echo "Deployed and serving from $url" >> "$GITHUB_STEP_SUMMARY"
