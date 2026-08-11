@@ -75,6 +75,11 @@ class Settings(BaseSettings):
         description="Shared secret for X-API-Key header; empty = no auth (dev only)",
     )
 
+    # --- Web UI ---
+    # Where the built SPA lives, relative to the working directory. The app serves it
+    # when the directory exists and runs API-only when it does not (see app/main.py).
+    web_dist_dir: str = Field(default="web/dist", description="Directory of the built web client")
+
     # --- Observability (LangSmith) ---
     # Standard LangChain vars; declared so they are visible/validated in one spot.
     langsmith_tracing: bool = Field(default=False, alias="LANGSMITH_TRACING")

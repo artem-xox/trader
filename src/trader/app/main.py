@@ -9,17 +9,21 @@ from __future__ import annotations
 import logging
 from collections.abc import AsyncIterator, Callable
 from contextlib import asynccontextmanager, nullcontext
+from pathlib import Path
 
 from dotenv import load_dotenv
 from fastapi import Depends, FastAPI, HTTPException, Security, status
 from fastapi.responses import StreamingResponse
 from fastapi.security import APIKeyHeader
+from fastapi.staticfiles import StaticFiles
 from langchain_core.messages import HumanMessage
 from langchain_core.tracers.context import tracing_v2_enabled
 from langsmith import trace, tracing_context
 
+from trader.app import probe
 from trader.app.formatting import format_result
 from trader.app.schemas import InvokeRequest, InvokeResponse, StreamEvent
+from trader.app.streaming import SSE_HEADERS
 from trader.common.config import get_settings
 from trader.core.bootstrap import build_agent
 from trader.core.models.domain import SkillResult
@@ -48,6 +52,7 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(title="AI Trader — Agent", lifespan=lifespan)
+app.include_router(probe.router)
 
 
 @app.get("/health")
@@ -163,4 +168,17 @@ async def _agent_sse(req: InvokeRequest) -> AsyncIterator[str]:
 
 @app.post("/agent/stream", dependencies=[Depends(_require_api_key)])
 async def stream(req: InvokeRequest) -> StreamingResponse:
-    return StreamingResponse(_agent_sse(req), media_type="text/event-stream")
+    return StreamingResponse(
+        _agent_sse(req), media_type="text/event-stream", headers=SSE_HEADERS
+    )
+
+
+# The SPA, last: routes registered above win, so the API keeps its paths and
+# everything else falls through to the build. Mounted only when the directory
+# exists, so `make app` runs without a prior `npm run build` — in the image the
+# Dockerfile's web stage always puts it there.
+_web_dist = Path(get_settings().web_dist_dir)
+if _web_dist.is_dir():
+    app.mount("/", StaticFiles(directory=_web_dist, html=True), name="web")
+else:
+    logger.info("web build not found at %s — serving API only", _web_dist)
