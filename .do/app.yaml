@@ -56,6 +56,15 @@ databases:
 # A development database — $7/mo, 512 MiB, reachable only from this app. It is NOT backed
 # up and is destroyed with the app, which is the trade accepted for a personal tool; a
 # periodic pg_dump is the cheap insurance and a standalone cluster is the upgrade.
+#
+# ⚠️ The deploy that FIRST adds this block usually fails, with:
+#   "Your deployment is waiting for trusted source networking to your database.
+#    This is common while the database is still creating, forking, or not yet online."
+# The database is provisioned by that same deploy, and the component is expected to
+# reach it before it finishes coming up. Re-run the deploy once the database shows as
+# online and it succeeds; nothing needs changing. Redeploys after that do not touch the
+# database — only destroying the app does. A standalone cluster (`production: true` plus
+# `cluster_name`) avoids the race entirely, because it already exists.
 - name: db
   engine: PG
   version: "16"
