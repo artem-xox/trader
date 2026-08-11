@@ -8,10 +8,12 @@ stays the single source of truth.
 
 from __future__ import annotations
 
+import json
 from functools import lru_cache
+from typing import Annotated
 
 from pydantic import Field, field_validator
-from pydantic_settings import BaseSettings, SettingsConfigDict
+from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
 
 
 class Settings(BaseSettings):
@@ -43,7 +45,13 @@ class Settings(BaseSettings):
     telegram_bot_token: str = Field(
         default="", alias="TELEGRAM_API_TOKEN", description="Telegram bot token"
     )
-    telegram_allowed_chat_ids: list[int] = Field(
+    # `NoDecode` is load-bearing: for a list field, pydantic-settings JSON-decodes the
+    # raw environment value *inside the source*, before any validator runs. So the
+    # comma-separated form this validator exists to parse never reached it, and an
+    # empty string — what a DigitalOcean env var with no value becomes — crashed the
+    # process at import with a bare JSONDecodeError. With NoDecode the string arrives
+    # here untouched.
+    telegram_allowed_chat_ids: Annotated[list[int], NoDecode] = Field(
         default_factory=list,
         description="Allowlist of chat IDs; empty means allow everyone (dev only)",
     )
@@ -61,6 +69,10 @@ class Settings(BaseSettings):
             stripped = value.strip()
             if not stripped:
                 return []
+            # A JSON list was the only form that worked before NoDecode, so one may
+            # still be sitting in a dashboard or a .env somewhere.
+            if stripped.startswith("["):
+                return [int(item) for item in json.loads(stripped)]
             return [int(item.strip()) for item in stripped.split(",") if item.strip()]
         raise TypeError(f"Unsupported chat ID value: {value!r}")
 

@@ -485,12 +485,29 @@ web (tsc --noEmit + build)┘        app_spec_location: .do/app.yaml
                                    then smoke: /health, then the SPA serves
 ```
 
-Two lessons copied verbatim from farkle:
+**The spec is the app.** `.do/app.yaml` is applied on every deploy, so the domain, the
+components and every environment variable are described in source and the app can be rebuilt
+with `doctl apps create --spec`. A dashboard edit survives only until the next deploy.
 
-- **`app_spec_location`, never `app_name`.** Given `app_name`, the action pulls the spec off
-  the *live app* and the in-repo spec is silently ignored.
+That only works because an App Platform spec is **declarative**, which is also the sharpest
+edge here: whatever stands in the file replaces the live value, and an env var the file omits
+is deleted rather than left alone. There is no "leave this one alone" — so secrets cannot be
+kept in the dashboard while the spec is applied from CI. Two consequences:
+
+- **Secret values are `${NAME}` references**, resolved at deploy time from repository secrets
+  of the same name (a documented feature of `digitalocean/app_action`). A literal secret must
+  never be written into the file — nor a placeholder: on 2026-08-11 the file still carried
+  `REPLACE_IN_DASHBOARD` when CI first applied it, which replaced six live secrets with that
+  string. The repository is public, so `AGENT_API_KEY` briefly became a documented working
+  credential for the live agent, and a blanked `TELEGRAM_ALLOWED_CHAT_IDS` crash-looped the
+  worker.
+- **A missing repository secret is equally dangerous** — it expands to an empty string and
+  wipes the value just as thoroughly. So the deploy job's first step refuses to run unless
+  every referenced secret is present and non-empty. Adding a secret to the spec means adding
+  it to that list too.
 - **`deploy_on_push: false`.** Left true, DigitalOcean's own webhook deploys on every push in
-  parallel with CI — the first of the two deploys ungated by tests.
+  parallel with CI — the first of the two deploys ungated by tests. Expect one canceled
+  deployment on the changeover: the flag only takes effect once the spec carrying it is live.
 
 Local dev loop:
 
