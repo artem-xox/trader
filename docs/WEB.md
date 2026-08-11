@@ -576,7 +576,7 @@ call, one hand-made SSE call, deployed to the real domain.
   conversation, runs a turn, and `GET /api/conversations/{id}` returns both messages with the
   structured `result` intact; restarting the service preserves history *and* agent context.
 
-### Phase 2 — chat UI *(≈2 d)*
+### Phase 2 — chat UI *(≈2 d)* — ✅ done
 
 - `KeyGate`, `Sidebar` (list / new / open / delete), `ChatPane`, `Composer`, `MessageList`,
   `ProgressTrail`, markdown answers via `react-markdown`.
