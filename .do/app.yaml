@@ -5,21 +5,35 @@
 #   - telegram : worker running the aiogram bot via long-polling; it calls the agent
 #                over the internal network (${agent.PRIVATE_URL}).
 #
+# THIS FILE IS THE APP. `.github/workflows/python-app.yml` applies it after the tests
+# pass, so the app is fully described here and could be rebuilt from scratch with
+# `doctl apps create --spec .do/app.yaml`. Edit the app here, not in the dashboard —
+# a dashboard edit survives only until the next deploy overwrites it.
+#
+# ⚠️  Secret values are `${NAME}` references, resolved at deploy time from repository
+# secrets of the same name. NEVER write a literal secret — or a placeholder — into
+# this file. An App Platform spec is declarative: whatever stands here replaces the
+# live value, and an env var missing from this file is deleted outright rather than
+# left alone. On 2026-08-11 this file still carried `REPLACE_IN_DASHBOARD` placeholders
+# when CI first applied it; six live secrets were replaced by that literal string —
+# including AGENT_API_KEY, which this public repository then documented as a working
+# credential for the live agent — and TELEGRAM_ALLOWED_CHAT_IDS was blanked, which
+# crash-looped the worker.
+#
+# The same mechanism makes an *unset* repository secret dangerous: it expands to an
+# empty string and wipes the value just as thoroughly. The deploy workflow therefore
+# refuses to run until every referenced secret is present and non-empty — see its
+# "Check deploy secrets" step, and add the secret there when adding one here.
+#
+# `${agent.PRIVATE_URL}` is not one of these: dotted names are DigitalOcean's own
+# bindables and the action leaves them for the platform to resolve.
+#
 # The agent service also serves the web client (docs/WEB.md): the SPA is built into
 # the image and mounted by FastAPI, so there is no static-site component and no
 # ingress rules — one component answers `/`, `/api/*` and `/agent/*`.
 #
-# Deploy: .github/workflows/python-app.yml applies this spec after tests pass. Both
-# components set `deploy_on_push: false`, so DigitalOcean's own webhook never deploys
-# in parallel with CI — the copy farkle learned the hard way, where every push to main
-# deployed twice and the first of the two was ungated by tests.
-#
-# Manual fallback:
-#   doctl apps update <APP_ID> --spec .do/app.yaml
-#
-# SECRET values below are placeholders — set the real values in the DO dashboard
-# (App → Settings → component → Environment Variables) or via `doctl`. Do NOT commit
-# real secrets here.
+# Both components set `deploy_on_push: false`: CI is the only deploy trigger, so a
+# push cannot deploy in parallel with — and untested ahead of — the test jobs.
 name: ai-trader
 region: fra
 
@@ -56,7 +70,7 @@ services:
       - key: OPENAI_API_KEY
         scope: RUN_TIME
         type: SECRET
-        value: REPLACE_IN_DASHBOARD
+        value: ${OPENAI_API_KEY}
       - key: OPENAI_MODEL_STRONG
         scope: RUN_TIME
         value: gpt-4.1
@@ -66,7 +80,7 @@ services:
       - key: TAVILY_API_KEY
         scope: RUN_TIME
         type: SECRET
-        value: REPLACE_IN_DASHBOARD
+        value: ${TAVILY_API_KEY}
       - key: AGENT_MAX_ITERATIONS
         scope: RUN_TIME
         value: "8"
@@ -76,14 +90,14 @@ services:
       - key: LANGSMITH_API_KEY
         scope: RUN_TIME
         type: SECRET
-        value: REPLACE_IN_DASHBOARD
+        value: ${LANGSMITH_API_KEY}
       - key: LANGSMITH_PROJECT
         scope: RUN_TIME
         value: trader
       - key: AGENT_API_KEY
         scope: RUN_TIME
         type: SECRET
-        value: REPLACE_IN_DASHBOARD
+        value: ${AGENT_API_KEY}
 
 workers:
   - name: telegram
@@ -100,14 +114,14 @@ workers:
       - key: TELEGRAM_API_TOKEN
         scope: RUN_TIME
         type: SECRET
-        value: REPLACE_IN_DASHBOARD
+        value: ${TELEGRAM_API_TOKEN}
       - key: TELEGRAM_ALLOWED_CHAT_IDS
         scope: RUN_TIME
-        value: ""
+        value: ${TELEGRAM_ALLOWED_CHAT_IDS}
       - key: AGENT_APP_URL
         scope: RUN_TIME
         value: ${agent.PRIVATE_URL}
       - key: AGENT_API_KEY
         scope: RUN_TIME
         type: SECRET
-        value: REPLACE_IN_DASHBOARD
+        value: ${AGENT_API_KEY}

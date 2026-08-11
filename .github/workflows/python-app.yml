@@ -69,13 +69,47 @@ jobs:
     permissions:
       contents: read
 
+    # The values behind the `${NAME}` references in .do/app.yaml. The action expands
+    # them out of its own environment, so they have to be here rather than on the step.
+    # Adding a secret to the spec means adding it here *and* to the list below.
+    env:
+      OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+      TAVILY_API_KEY: ${{ secrets.TAVILY_API_KEY }}
+      LANGSMITH_API_KEY: ${{ secrets.LANGSMITH_API_KEY }}
+      AGENT_API_KEY: ${{ secrets.AGENT_API_KEY }}
+      TELEGRAM_API_TOKEN: ${{ secrets.TELEGRAM_API_TOKEN }}
+      TELEGRAM_ALLOWED_CHAT_IDS: ${{ secrets.TELEGRAM_ALLOWED_CHAT_IDS }}
+
     steps:
       - uses: actions/checkout@v4
 
-      # `app_spec_location` and `app_name` are mutually exclusive, and picking the
-      # wrong one inverts what deploys: given `app_name`, the action pulls the spec
-      # off the *live app* and the in-repository spec is ignored entirely. Point at
-      # the file.
+      # The spec is declarative, so a missing repository secret does not fail the
+      # substitution — it expands to an empty string, and that empty string then
+      # *replaces* the live value. An unset secret is therefore indistinguishable from
+      # a deliberate "wipe this", which is how prod broke on 2026-08-11 (from the other
+      # direction: placeholders instead of blanks). Refuse to deploy rather than find
+      # out afterwards. Names only are printed; values never are.
+      - name: Check deploy secrets
+        run: |
+          required=(OPENAI_API_KEY TAVILY_API_KEY LANGSMITH_API_KEY AGENT_API_KEY
+                    TELEGRAM_API_TOKEN TELEGRAM_ALLOWED_CHAT_IDS)
+          missing=()
+          for name in "${required[@]}"; do
+            [ -n "${!name}" ] || missing+=("$name")
+          done
+          if [ ${#missing[@]} -gt 0 ]; then
+            printf 'missing or empty repository secret: %s\n' "${missing[@]}"
+            echo
+            echo 'Add it under Settings → Secrets and variables → Actions, then re-run.'
+            echo 'Deploying now would overwrite the live value with an empty string.'
+            exit 1
+          fi
+          echo "all ${#required[@]} required secrets present"
+
+      # `app_spec_location`, not `app_name`: given `app_name` the action would redeploy
+      # whatever spec the app already carries and ignore this repository entirely, so
+      # the domain, the components and the env vars would live only in the dashboard.
+      # Pointing at the file is what makes the app reproducible from source.
       - name: Deploy app spec
         id: deploy
         uses: digitalocean/app_action/deploy@v2
