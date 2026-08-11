@@ -108,6 +108,7 @@ gated by `X-API-Key`.
 | DELETE | `/api/conversations/{id}` | Delete transcript **and** the agent's checkpoints for that thread |
 | POST | `/api/conversations/{id}/turns` | **The write path.** Body `{message, debug}`. Streams SSE (`status` … `final`/`error`) and persists both messages |
 | GET | `/api/markets/{market_id}` | Card enrichment (image, volume, end date, price history), `Cache-Control: public, max-age=60` |
+| GET | `/api/health`, POST `/api/stream-probe` | Delivery-path probes (Phase 0): the API answers under `/api`, and SSE is not buffered |
 | GET | `/health` | Unchanged (used by the App Platform health check) |
 | POST | `/agent/invoke`, `/agent/stream` | Unchanged — Telegram and the eval harness keep using these |
 
@@ -566,7 +567,7 @@ call, one hand-made SSE call, deployed to the real domain.
   that origin** — the SSE one is the answer to the top risk; if it reports "buffered", set
   `disable_edge_cache: true` on the app and re-run it.
 
-### Phase 1 — persistence *(≈1 d)*
+### Phase 1 — persistence *(≈1 d)* — ✅ done
 
 - Dev database attached; `DATABASE_URL` wired; `store.py` + `schema.sql` bootstrap at startup.
 - `AsyncPostgresSaver` replaces `InMemorySaver` in the FastAPI lifespan.

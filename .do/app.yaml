@@ -51,6 +51,16 @@ domains:
   # No `zone`: that field is for domains whose nameservers DigitalOcean runs, and
   # these are Cloudflare's.
 
+databases:
+# Conversations for the web client and the agent's per-thread memory (docs/WEB.md §5.2).
+# A development database — $7/mo, 512 MiB, reachable only from this app. It is NOT backed
+# up and is destroyed with the app, which is the trade accepted for a personal tool; a
+# periodic pg_dump is the cheap insurance and a standalone cluster is the upgrade.
+- name: db
+  engine: PG
+  version: "16"
+  production: false
+
 services:
   - name: agent
     dockerfile_path: Dockerfile
@@ -98,6 +108,11 @@ services:
         scope: RUN_TIME
         type: SECRET
         value: ${AGENT_API_KEY}
+      # A DigitalOcean bindable, resolved by the platform — dotted, so the deploy action
+      # leaves it alone rather than substituting a repository secret.
+      - key: DATABASE_URL
+        scope: RUN_TIME
+        value: ${db.DATABASE_URL}
 
 workers:
   - name: telegram
