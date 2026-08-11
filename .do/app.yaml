@@ -51,24 +51,36 @@ domains:
   # No `zone`: that field is for domains whose nameservers DigitalOcean runs, and
   # these are Cloudflare's.
 
-databases:
-# Conversations for the web client and the agent's per-thread memory (docs/WEB.md §5.2).
-# A development database — $7/mo, 512 MiB, reachable only from this app. It is NOT backed
-# up and is destroyed with the app, which is the trade accepted for a personal tool; a
-# periodic pg_dump is the cheap insurance and a standalone cluster is the upgrade.
+# NO DATABASE ATTACHED — temporarily, and deliberately. To put it back, restore the
+# block below and the DATABASE_URL env on the agent; the application code needs no
+# change, it picks up persistence whenever DATABASE_URL points at a reachable Postgres.
 #
-# ⚠️ The deploy that FIRST adds this block usually fails, with:
-#   "Your deployment is waiting for trusted source networking to your database.
-#    This is common while the database is still creating, forking, or not yet online."
-# The database is provisioned by that same deploy, and the component is expected to
-# reach it before it finishes coming up. Re-run the deploy once the database shows as
-# online and it succeeds; nothing needs changing. Redeploys after that do not touch the
-# database — only destroying the app does. A standalone cluster (`production: true` plus
-# `cluster_name`) avoids the race entirely, because it already exists.
-- name: db
-  engine: PG
-  version: "16"
-  production: false
+#   databases:
+#   - name: db
+#     engine: PG
+#     version: "16"
+#     production: false      # dev database: $7/mo, 512 MiB, no backups, dies with the app
+#
+# Why it is out: every deploy from the moment this block was added failed — three in a
+# row, each building fine, then sitting in DEPLOYING for ~9 minutes and reaching ERROR
+# with no runtime output at all, which means the container was never started. The
+# dashboard blamed "waiting for trusted source networking to your database … common
+# while the database is still creating, forking, or not yet online" — but the database's
+# own metrics showed it serving load forty minutes before the last of those attempts, so
+# "not yet online" does not explain it. Meanwhile production sat three merges behind on
+# Phase 0 code, held back by infrastructure rather than by anything in this repository.
+#
+# So the two problems are separated: ship the code, debug the attachment on its own. The
+# app runs without Postgres by design (see the lifespan in app/main.py) — the agent and
+# the Telegram bot work, conversation endpoints answer 503, and GET /api/health reports
+# `storage: unavailable` so the degraded mode cannot be mistaken for a healthy one.
+#
+# Removing the block also destroys the dev database, which is the point as much as the
+# consequence: nothing ever connected to it, so there is no data to lose, and a fresh
+# attach starts from a clean app↔database association rather than the stuck one.
+#
+# A standalone cluster (~$15/mo, `production: true` plus `cluster_name`) sidesteps this
+# class of failure entirely, since it exists and is online before any deploy refers to it.
 
 services:
   - name: agent
@@ -117,11 +129,13 @@ services:
         scope: RUN_TIME
         type: SECRET
         value: ${AGENT_API_KEY}
+      # DATABASE_URL is absent while no database is attached — see the note at the top of
+      # this file. Restoring it means one line:
+      #   - key: DATABASE_URL
+      #     scope: RUN_TIME
+      #     value: ${db.DATABASE_URL}
       # A DigitalOcean bindable, resolved by the platform — dotted, so the deploy action
-      # leaves it alone rather than substituting a repository secret.
-      - key: DATABASE_URL
-        scope: RUN_TIME
-        value: ${db.DATABASE_URL}
+      # leaves it alone rather than substituting a repository secret of that name.
 
 workers:
   - name: telegram

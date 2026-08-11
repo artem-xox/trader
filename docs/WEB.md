@@ -436,11 +436,11 @@ domains:
   - domain: trader.iamxox.space
     type: PRIMARY
 
-databases:                     # added in Phase 1, not before: it bills from the
-  - name: db                   # moment it is applied, and nothing reads it yet
-    engine: PG
-    version: "16"
-    production: false          # dev database: $7/mo, 512 MiB, no backups
+# databases:                   # DETACHED for now — every deploy that carried this block
+#   - name: db                 # failed in DEPLOYING without ever starting the container,
+#     engine: PG               # while the database itself was demonstrably serving. The
+#     version: "16"            # code needs no change to use it again: set DATABASE_URL
+#     production: false        # at a reachable Postgres and persistence comes back.
 
 services:
   - name: agent
