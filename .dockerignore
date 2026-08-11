@@ -10,3 +10,7 @@ docs
 .ruff_cache
 .pytest_cache
 .mypy_cache
+# The image builds the web client from source; a local build or install would
+# only invalidate the layer cache and be overwritten by the web stage anyway.
+web/node_modules
+web/dist

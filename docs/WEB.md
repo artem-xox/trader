@@ -415,8 +415,14 @@ without a frontend build.
 
 ### 7.2 App spec sketch (`.do/app.yaml`)
 
+The app keeps the name it already has — **`ai-trader`**, not `trader-prod`. The deploy action
+matches an app by the `name` in the spec, so renaming would create a *second* app: new
+hostname, secrets re-entered by hand, and the original left running and billing until someone
+notices. The farkle-style `-prod` suffix earns its keep only where there is also a `-dev`, and
+here there is not (D2).
+
 ```yaml
-name: trader-prod
+name: ai-trader
 region: fra
 
 alerts:
@@ -429,8 +435,8 @@ domains:
   - domain: trader.iamxox.space
     type: PRIMARY
 
-databases:
-  - name: db
+databases:                     # added in Phase 1, not before: it bills from the
+  - name: db                   # moment it is applied, and nothing reads it yet
     engine: PG
     version: "16"
     production: false          # dev database: $7/mo, 512 MiB, no backups
@@ -533,11 +539,15 @@ De-risk the infrastructure **before** writing any UI. A blank React page, one `/
 call, one hand-made SSE call, deployed to the real domain.
 
 - `web/` scaffold (Vite + TS + React), Dockerfile build stage, FastAPI static mount.
-- `.do/app.yaml` → `trader-prod`, domain, `deploy_on_push: false`; Cloudflare CNAME first.
+- `.do/app.yaml`: domain, `deploy_on_push: false`; the Cloudflare CNAME must exist first.
 - CI: `web` job + `deploy` job with a smoke check.
-- **Done when:** `https://trader.iamxox.space` serves the page; `/api/health` returns `ok`
-  through the public domain; a test SSE call renders frames **incrementally in the browser**
-  (this is the answer to the top risk — if it fails, flip `disable_edge_cache` and re-check).
+- Two probe endpoints (`app/probe.py`) and a page that runs them: `GET /api/health` proves the
+  API answers on the path the browser uses now that FastAPI also serves the SPA, and
+  `POST /api/stream-probe` emits five frames a second apart so the page can measure their
+  **arrival times** and say plainly whether the stream was incremental or buffered.
+- **Done when:** `https://trader.iamxox.space` serves the page, and both probes pass **from
+  that origin** — the SSE one is the answer to the top risk; if it reports "buffered", set
+  `disable_edge_cache: true` on the app and re-run it.
 
 ### Phase 1 — persistence *(≈1 d)*
 
