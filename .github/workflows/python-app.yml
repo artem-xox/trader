@@ -133,6 +133,11 @@ jobs:
           token: ${{ secrets.DIGITALOCEAN_ACCESS_TOKEN }}
           app_spec_location: .do/app.yaml
           print_build_logs: true
+          # The build succeeding tells you nothing about the container starting. A
+          # deployment that reached ERROR after nine minutes in DEPLOYING — the app
+          # crash-looping — printed no runtime output at all without this, which is
+          # exactly when you need it.
+          print_deploy_logs: true
 
       # The action reports success once DigitalOcean says the deployment is ACTIVE,
       # which is not the same as the app answering. Check the app's own live URL
@@ -183,3 +188,15 @@ jobs:
           echo "Checking $url"
           retry "$url" serving "$url"
           echo "Deployed and serving from $url" >> "$GITHUB_STEP_SUMMARY"
+
+          # The app starts without Postgres rather than crash-looping, so "serving" no
+          # longer implies "fully working". Report which mode is live instead of letting
+          # a degraded deployment pass silently. Not fatal: a running agent with no
+          # conversation storage still beats a rolled-back release.
+          storage=$(curl --fail --silent --location "${url%/}/api/health" \
+                    | jq -r '.storage // "unknown"')
+          echo "Storage: $storage" >> "$GITHUB_STEP_SUMMARY"
+          if [ "$storage" != "postgres" ]; then
+            echo "::warning::conversation storage is '$storage' — the agent is up but " \
+                 "conversations will answer 503. Check the deploy logs above."
+          fi

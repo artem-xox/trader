@@ -14,7 +14,7 @@ import json
 import time
 from collections.abc import AsyncIterator
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Request
 from fastapi.responses import StreamingResponse
 
 from trader.app.streaming import SSE_HEADERS
@@ -28,13 +28,20 @@ _PROBE_INTERVAL_S = 1.0
 
 
 @router.get("/health")
-async def health() -> dict[str, str]:
+async def health(request: Request) -> dict[str, str]:
     """Liveness, reachable on the path the browser actually uses.
 
-    `/health` (no prefix) stays as it is — that one is the App Platform health
-    check and must not move.
+    Also reports whether persistence came up. The app deliberately starts without
+    Postgres rather than crash-looping (see the lifespan), so without this a degraded
+    deployment would look identical to a healthy one from the outside.
+
+    `/health` (no prefix) stays as it is — that one is the App Platform health check
+    and must not move.
     """
-    return {"status": "ok"}
+    return {
+        "status": "ok",
+        "storage": "postgres" if request.app.state.store is not None else "unavailable",
+    }
 
 
 async def _probe_frames() -> AsyncIterator[str]:

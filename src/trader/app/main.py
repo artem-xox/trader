@@ -37,30 +37,10 @@ load_dotenv()  # so LANGSMITH_* and other vars are present for LangChain tracing
 
 logger = logging.getLogger(__name__)
 
-@asynccontextmanager
-async def lifespan(app: FastAPI):
-    """Wire persistence, then the agent.
-
-    With DATABASE_URL set, conversations and the agent's per-thread memory both live in
-    Postgres and survive a restart. Without it the app runs entirely in memory: the
-    agent still works, the conversation endpoints answer 503. That is the mode tests,
-    the eval harness and a local `make app` without a database run in.
-    """
-    settings = get_settings()
-    # In-flight turns outlive their requests (see conversations.create_turn), so the app
-    # holds the references that keep them from being garbage-collected.
-    app.state.turns = set()
-    app.state.store = None
-    app.state.checkpointer = None
-
-    if not settings.database_url:
-        logger.warning("DATABASE_URL is unset — conversations disabled, agent memory in-process")
-        app.state.agent = build_agent()
-        yield
-        return
-
+async def _open_persistence(dsn: str) -> tuple[Store, AsyncPostgresSaver, AsyncConnectionPool]:
+    """Open both pools and apply both schemas: ours and the checkpointer's."""
     checkpointer_pool = AsyncConnectionPool(
-        settings.database_url,
+        dsn,
         min_size=1,
         max_size=3,
         open=False,
@@ -68,18 +48,57 @@ async def lifespan(app: FastAPI):
         kwargs={"autocommit": True, "prepare_threshold": 0, "row_factory": dict_row},
     )
     await checkpointer_pool.open(wait=True)
-    checkpointer = AsyncPostgresSaver(checkpointer_pool)
-    await checkpointer.setup()
+    try:
+        checkpointer = AsyncPostgresSaver(checkpointer_pool)
+        await checkpointer.setup()
+        store = await Store.connect(dsn)
+    except Exception:
+        await checkpointer_pool.close()
+        raise
+    return store, checkpointer, checkpointer_pool
 
-    app.state.store = await Store.connect(settings.database_url)
-    app.state.checkpointer = checkpointer
-    app.state.agent = build_agent(checkpointer=checkpointer)
-    logger.info("Agent initialized with Postgres persistence")
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Wire persistence, then the agent.
+
+    With a reachable DATABASE_URL, conversations and the agent's per-thread memory both
+    live in Postgres and survive a restart.
+
+    Without one — unset, or unreachable — the app runs entirely in memory instead of
+    refusing to start: the agent still answers, Telegram still works, and only the
+    conversation endpoints are down (503). A crash here is worse than a degraded start,
+    because it takes the whole service with it and App Platform then rolls the release
+    back. `GET /api/health` reports which mode is live, so "degraded" cannot pass for
+    "fine".
+    """
+    settings = get_settings()
+    # In-flight turns outlive their requests (see conversations.create_turn), so the app
+    # holds the references that keep them from being garbage-collected.
+    app.state.turns = set()
+    app.state.store = None
+    app.state.checkpointer = None
+    pool = None
+
+    if not settings.database_url:
+        logger.warning("DATABASE_URL is unset — conversations disabled, agent memory in-process")
+    else:
+        try:
+            app.state.store, app.state.checkpointer, pool = await _open_persistence(
+                settings.database_url
+            )
+            logger.info("Agent initialized with Postgres persistence")
+        except Exception:  # noqa: BLE001 - degrade rather than fail the whole service
+            logger.exception("Postgres unavailable — conversations disabled, memory in-process")
+
+    app.state.agent = build_agent(checkpointer=app.state.checkpointer)
     try:
         yield
     finally:
-        await app.state.store.close()
-        await checkpointer_pool.close()
+        if app.state.store is not None:
+            await app.state.store.close()
+        if pool is not None:
+            await pool.close()
 
 
 app = FastAPI(title="AI Trader — Agent", lifespan=lifespan)

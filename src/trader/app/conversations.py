@@ -36,13 +36,15 @@ router = APIRouter(
 
 
 def get_store(request: Request) -> Store:
-    """The store is absent when DATABASE_URL is unset — a local `make app` without a
-    database still serves the agent, it just has nowhere to keep conversations."""
+    """The store is absent when DATABASE_URL is unset *or* when Postgres could not be
+    reached at startup: the app degrades instead of refusing to boot, so the agent
+    still answers and only conversations are down. Which of the two it was is in the
+    startup log; `GET /api/health` reports that storage is off either way."""
     store: Store | None = getattr(request.app.state, "store", None)
     if store is None:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="Conversation storage is not configured (DATABASE_URL is unset)",
+            detail="Conversation storage is unavailable — the agent is running without it",
         )
     return store
 
