@@ -10,6 +10,7 @@ from __future__ import annotations
 from typing import Any
 
 import httpx
+from langsmith import trace
 
 DEFAULT_TIMEOUT = httpx.Timeout(15.0)
 
@@ -24,9 +25,19 @@ class BaseHttpClient:
 
         Raises `httpx.HTTPError` on transport failures and non-2xx responses; callers
         decide how to surface that (agent tools return an error string the model can
-        react to).
+        react to). Traced via LangSmith so request params, response body, and status
+        code show up in the same project as the agent's own runs; follows the ambient
+        tracing_context, so it's suppressed/included exactly like everything else.
         """
-        async with httpx.AsyncClient(timeout=self._timeout) as client:
-            resp = await client.get(f"{self._base_url}{path}", params=params)
-            resp.raise_for_status()
-            return resp.json()
+        async with trace(
+            name=f"GET {path}",
+            run_type="tool",
+            inputs={"base_url": self._base_url, "path": path, "params": params},
+        ) as run:
+            async with httpx.AsyncClient(timeout=self._timeout) as client:
+                resp = await client.get(f"{self._base_url}{path}", params=params)
+                run.add_outputs({"status_code": resp.status_code})
+                resp.raise_for_status()
+                body = resp.json()
+            run.add_outputs({"status_code": resp.status_code, "body": body})
+            return body
