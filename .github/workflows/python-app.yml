@@ -73,7 +73,7 @@ jobs:
         working-directory: web
 
   deploy:
-    name: Deploy to DigitalOcean
+    name: deploy
     needs: [test, web]
     if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest

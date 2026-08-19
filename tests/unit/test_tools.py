@@ -12,6 +12,7 @@ import pytest
 
 from trader.core.clients import PolymarketClient, parse_market
 from trader.core.clients.polymarket import collect_markets, parse_market_detail
+from trader.core.clients.polymarket.models import PER_EVENT_CAP
 from trader.core.tools import build_polymarket_tools
 
 
@@ -69,12 +70,15 @@ def test_parse_market_volume_24h_absent():
 def test_collect_markets_caps_per_event():
     """One busy event (many near-zero candidate markets) must not fill the whole list."""
     events = [
-        {"slug": "busy", "markets": [_raw_market(f"a{i}") for i in range(10)]},
+        {
+            "slug": "busy",
+            "markets": [_raw_market(f"a{i}") for i in range(PER_EVENT_CAP + 10)],
+        },
         {"slug": "other", "markets": [_raw_market("b1")]},
     ]
-    markets = collect_markets(events, limit=8)
+    markets = collect_markets(events, limit=PER_EVENT_CAP + 5)
     from_busy = [m for m in markets if m["market_id"].startswith("a")]
-    assert len(from_busy) == 3  # _PER_EVENT_CAP
+    assert len(from_busy) == PER_EVENT_CAP
     assert any(m["market_id"] == "b1" for m in markets)
 
 
