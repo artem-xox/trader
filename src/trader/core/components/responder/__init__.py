@@ -15,6 +15,8 @@ tool result, not an answer).
 
 from __future__ import annotations
 
+from datetime import datetime, timezone
+
 from langchain_core.language_models import BaseChatModel
 from langchain_core.messages import AIMessage, BaseMessage, SystemMessage
 
@@ -59,6 +61,11 @@ class Responder:
 
         prompt = self._base_prompt if skill is None else skill.responder_prompt
         schema = self._default_schema if skill is None else skill.output_schema
+        # See the planner for why this is stated directly rather than left to the
+        # `current_datetime` tool result — the synthesis step must not inherit a wrong
+        # date the planner's draft reasoned from.
+        today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+        prompt = f"{prompt}\n\nToday's date (UTC): {today}."
 
         # Force one tool call shaped like `schema` and parse its args. We keep the raw
         # message so a rare parser hiccup is recovered (`_recover`) instead of failing the

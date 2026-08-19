@@ -93,11 +93,16 @@ def build_polymarket_tools(
         event name as the query (e.g. query="Austrian Grand Prix", tag="f1"). The general
         keyword index does NOT surface these per-event sports markets; a tagged search does.
 
-        Returns a JSON list of markets with their question, current implied probabilities
-        per outcome, traded volume (total and 24h), liquidity, end date, `clob_token_ids`,
-        and a link. At most 3 markets per event are returned, so results span distinct
-        events. Use this to find real markets before suggesting any bet — never invent
-        markets.
+        Returns a JSON list of markets with their question, parent `event` title, current
+        implied probabilities per outcome, traded volume (total and 24h), liquidity,
+        `ends_at` (resolution deadline), `starts_at` when the market is about a scheduled
+        event like a race or fixture (the date the question is really about — `ends_at` is
+        padded days past it), `clob_token_ids`, and a link. Markets are ranked by how open
+        the question still is (implied probability closest to 50/50), not by id, so a
+        capped result keeps the contenders. A keyword or trending search caps at 3 markets
+        per event so results span distinct events; a tagged search instead goes deep on
+        the single event the query named, since that event's whole grid is the answer.
+        Use this to find real markets before suggesting any bet — never invent markets.
         """
         return await polymarket.search(query, limit=limit, tag=tag)
 

@@ -132,7 +132,9 @@ positional unpacking in wiring code):
 
 - `search(query, limit, tag)` — Gamma `public-search`, active markets; empty query =
   trending browse (top-volume events); `tag` = category browse for per-event sports
-  markets; ≤ 3 markets per event for diversity.
+  markets. Keyword/trending caps at 3 markets per event for diversity; a tagged search
+  goes deep on the one event the query named (up to 20). Within an event, markets rank
+  by how open the question still is, not by id, so a capped result keeps the contenders.
 - `market(slug)` — Gamma `/markets?slug=` then `/events?slug=`; full detail for one
   market incl. resolution criteria. Accepts a market slug, an event slug, or a full URL.
 - `orderbook(token_id)` — CLOB book snapshot: spread_bps, depth, realised vol, top levels.
