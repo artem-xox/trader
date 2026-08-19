@@ -8,6 +8,8 @@ to the base prompt; in normal mode only the base prompt and base tools are used.
 
 from __future__ import annotations
 
+from datetime import datetime, timezone
+
 from langchain_core.language_models import BaseChatModel
 from langchain_core.messages import SystemMessage
 from langchain_core.tools import BaseTool
@@ -36,6 +38,13 @@ class Planner:
         else:
             prompt = f"{self._base_prompt}\n\n{skill.planner_prompt}"
             tools = list(skill.tools)
+        # Stated directly rather than left to the `current_datetime` tool: a model can
+        # (and did) reason from training-data knowledge of "the current season" instead of
+        # calling it, or call it and then not actually use the result. Putting today's date
+        # in the system prompt itself removes that failure mode for date-dependent reasoning
+        # (e.g. "the next race"); the tool remains for when exact time-of-day math is needed.
+        today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+        prompt = f"{prompt}\n\nToday's date (UTC): {today}."
 
         model = self._model.bind_tools(tools) if tools else self._model
         response = await model.ainvoke([SystemMessage(prompt), *state["messages"]])

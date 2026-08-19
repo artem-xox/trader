@@ -13,6 +13,7 @@ import httpx
 
 from trader.core.clients.base import BaseHttpClient
 from trader.core.clients.polymarket.models import (
+    TAG_PER_EVENT_CAP,
     EventsParams,
     GammaEvent,
     PublicSearchParams,
@@ -57,7 +58,12 @@ class PolymarketClient(BaseHttpClient):
 
     async def _search_by_tag(self, tag: str, query: str, limit: int) -> str:
         """Browse a category by tag, then narrow to the query client-side. This is how
-        a specific race or fixture is found, since the keyword index omits them."""
+        a specific race or fixture is found, since the keyword index omits them.
+
+        Unlike the keyword/trending paths, a matched event here goes deep (up to
+        `TAG_PER_EVENT_CAP` markets) — the query already named one specific event, so
+        the point is that event's whole grid, not a spread across many events.
+        """
         try:
             events = await self._list_events(EventsParams(tag_slug=tag, limit=100))
         except httpx.HTTPError as exc:
@@ -65,9 +71,15 @@ class PolymarketClient(BaseHttpClient):
         if events is None:
             return f"No Polymarket events found for tag: {tag!r}."
 
-        markets = collect_markets(filter_events_by_query(events, query), limit)
+        matched = filter_events_by_query(events, query)
+        markets = collect_markets(matched, limit, per_event_cap=TAG_PER_EVENT_CAP)
         if not markets:
-            return f"No active Polymarket markets found for {query!r} in category {tag!r}."
+            # `events` is volume-ordered, so this sample shows what actually exists in
+            # the category — lets the caller retry with a real event name instead of
+            # concluding the whole category is empty.
+            nearby = [e.title for e in events if e.title][:8]
+            hint = f" Events actually in this category: {nearby}." if nearby else ""
+            return f"No active Polymarket markets found for {query!r} in category {tag!r}.{hint}"
         return json.dumps(markets, ensure_ascii=False)
 
     async def _browse_trending(self, limit: int) -> str:
@@ -118,4 +130,4 @@ class PolymarketClient(BaseHttpClient):
         if not (isinstance(data, list) and data):
             return []
         event = GammaEvent.model_validate(data[0])
-        return [m.to_detail(event.slug) for m in event.markets]
+        return [m.to_detail(event.slug, event.title) for m in event.markets]
