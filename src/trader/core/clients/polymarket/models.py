@@ -19,7 +19,7 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 # Cap markets taken from a single event so one busy event (e.g. an election with dozens
 # of candidate markets, most at near-zero probability) cannot fill the whole result list.
-PER_EVENT_CAP = 3
+PER_EVENT_CAP = 20
 
 
 def _json_list(value: Any) -> list:
